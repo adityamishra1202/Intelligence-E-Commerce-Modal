@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ShopZone.com: Spend less. Smile more.</title>
+  <link rel="stylesheet" href="css/style.css" />
+  <!-- Favicon icon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📦</text></svg>">
+</head>
+<body>
+
+ 
+  <header class="header">
+    <nav class="nav-main">
+      
+      <!-- Brand Logo with Amazon-Style Smile -->
+      <a href="#" class="nav-logo" title="ShopZone Home">
+        <div class="logo-container">
+          <div class="logo-text">
+            <span>ShopZone</span><span class="logo-dot">.</span><span class="logo-domain">in</span>
+          </div>
+          <!-- Amazon Iconic Smile Arc (Custom Scalable SVG) -->
+          <svg class="logo-smile" viewBox="0 0 80 18" xmlns="http://www.w3.org/2000/svg">
+            <path d="M 4 5 Q 36 21 68 8" fill="none" stroke="#ff9900" stroke-width="3" stroke-linecap="round" />
+            <polygon points="64,3 74,8 68,14" fill="#ff9900" />
+          </svg>
+        </div>
+      </a>
+
+      <!-- Deliver To Location -->
+      <div class="nav-box nav-location" id="locationBtn" title="Change delivery address">
+        <span class="location-icon">📍</span>
+        <div class="location-text">
+          <span class="location-top">Deliver to Aditya</span>
+          <span class="location-bottom" id="locDisplay">New York 10001</span>
+        </div>
+      </div>
+
+      <!-- Live Search Bar -->
+      <div class="nav-search">
+        <select class="search-category-select" id="searchCategorySelect">
+          <option value="All">All Departments</option>
+          <option value="Electronics">Electronics</option>
+          <option value="Computers">Computers</option>
+          <option value="Gaming">Gaming</option>
+          <option value="Fashion">Fashion</option>
+          <option value="Home & Kitchen">Home & Kitchen</option>
+        </select>
+        <input 
+          type="text" 
+          class="search-input" 
+          id="searchInput" 
+          placeholder="Search ShopZone products, brands, or deals..." 
+          autocomplete="off"
+        />
+        <button class="search-btn" id="searchBtn" title="Search">
+          🔍
+        </button>
+      </div>
+
+      <!-- Language Selector -->
+      <div class="nav-box nav-lang" title="Language selection">
+        <span style="font-size: 16px;">🇺🇸</span>
+        <span>EN</span>
+        <span style="font-size: 10px; color: #aaa;">▼</span>
+      </div>
+
+      <!-- Account & Lists -->
+      <div class="nav-box nav-account">
+        <span class="nav-line-1">Hello, Aditya</span>
+        <span class="nav-line-2">Account & Lists <span style="font-size: 10px; color: #aaa;">▼</span></span>
+      </div>
+
+      <!-- Returns & Orders -->
+      <div class="nav-box nav-orders">
+        <span class="nav-line-1">Returns</span>
+        <span class="nav-line-2">& Orders</span>
+      </div>
+
+      <!-- Cart Button -->
+      <div class="nav-box nav-cart" id="cartIconBtn" title="View Cart">
+        <div class="cart-icon-wrap">
+          <span class="cart-icon">🛒</span>
+          <span class="cart-count" id="cartBadge">0</span>
+        </div>
+        <span class="cart-text">Cart</span>
+      </div>
+
+    </nav>
+
+    <!-- Sub Navigation Bar -->
+    <div class="nav-sub">
+      <div class="sub-left">
+        <button class="sub-all-btn" id="sidebarOpenBtn">
+          <span>☰</span>
+          <span>All</span>
+        </button>
+        <a href="#deals" class="sub-link" onclick="window.filterByCategory('All')">Today's Deals</a>
+        <a href="#productsSection" class="sub-link" onclick="window.filterByCategory('Electronics')">Electronics</a>
+        <a href="#productsSection" class="sub-link" onclick="window.filterByCategory('Computers')">Computers</a>
+        <a href="#productsSection" class="sub-link" onclick="window.filterByCategory('Gaming')">Gaming</a>
+        <a href="#productsSection" class="sub-link" onclick="window.filterByCategory('Fashion')">Fashion</a>
+        <a href="#productsSection" class="sub-link" onclick="window.filterByCategory('Home & Kitchen')">Home & Kitchen</a>
+        <a href="#" class="sub-link">Registry</a>
+        <a href="#" class="sub-link">Customer Service</a>
+      </div>
+      <div class="sub-right">
+        <span class="sub-promo">⚡ Great Shopping Festival | Fast 1-Day Delivery</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ========================================================
+       HERO BANNER CAROUSEL
+       ======================================================== -->
+  <section class="hero-slider-container" id="heroSliderContainer">
+    <div id="heroSlider">
+      <!-- Slides dynamically rendered by js/app.js -->
+    </div>
+    
+    <!-- Hero Slider Controls -->
+    <button class="hero-nav-arrow hero-prev" id="heroPrev" aria-label="Previous Slide">‹</button>
+    <button class="hero-nav-arrow hero-next" id="heroNext" aria-label="Next Slide">›</button>
+
+    <!-- Gradient fade overlay that smoothly blends into cards -->
+    <div class="hero-gradient-overlay"></div>
+  </section>
+
+  <!-- ========================================================
+       MAIN BODY CONTENT
+       ======================================================== -->
+  <main class="main-content">
+
+    <!-- Amazon Classic 4-Quadrant Category Feature Cards -->
+    <section class="promo-grid" id="promoGrid">
+      <!-- Promo quad cards dynamically loaded from products.js -->
+    </section>
+
+    <!-- Today's Lightning Deals / Horizontal Scroll -->
+    <section class="deals-section" id="deals">
+      <div class="deals-header">
+        <div class="deals-title-wrap">
+          <h2 class="deals-title">Today's Lightning Deals</h2>
+          <span class="deals-timer" id="dealsCountdown">Ends in 09:44:20</span>
+        </div>
+        <a href="#productsSection" class="promo-link" onclick="window.filterByCategory('All')">See all deals ›</a>
+      </div>
+      <div class="deals-scroll-container" id="dealsContainer">
+        <!-- Deal items dynamically rendered -->
+      </div>
+    </section>
+
+    <!-- Main Products Section -->
+    <section class="products-section" id="productsSection">
+      
+      <!-- Toolbar with Title & Category Pills -->
+      <div class="products-toolbar">
+        <div>
+          <span class="products-heading">Explore Products</span>
+          <span class="products-count" id="productsCount"></span>
+        </div>
+
+        <div class="filter-pills">
+          <button class="filter-pill active" data-category="All">All Categories</button>
+          <button class="filter-pill" data-category="Electronics">Electronics</button>
+          <button class="filter-pill" data-category="Computers">Computers</button>
+          <button class="filter-pill" data-category="Gaming">Gaming</button>
+          <button class="filter-pill" data-category="Fashion">Fashion</button>
+          <button class="filter-pill" data-category="Home & Kitchen">Home & Kitchen</button>
+        </div>
+      </div>
+
+      <!-- Products Grid -->
+      <div class="products-grid" id="productsGrid">
+        <!-- Products populated from products.js -->
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- ========================================================
+       SLIDE-OVER CART DRAWER
+       ======================================================== -->
+  <div class="cart-drawer-overlay" id="cartDrawerOverlay"></div>
+  <aside class="cart-drawer" id="cartDrawer" aria-label="Shopping Cart">
+    <div class="cart-drawer-header">
+      <h3 class="cart-drawer-title">
+        <span>🛒</span> Shopping Cart
+      </h3>
+      <button class="cart-drawer-close" id="cartCloseBtn" aria-label="Close Cart">✕</button>
+    </div>
+
+    <div class="cart-drawer-items" id="cartItemsList">
+      <!-- Items dynamically injected here -->
+    </div>
+
+    <div class="cart-drawer-footer">
+      <div class="cart-subtotal-row">
+        <span class="subtotal-label">Subtotal:</span>
+        <span class="subtotal-amount" id="cartSubtotal">$0.00</span>
+      </div>
+      <button class="btn-checkout" id="checkoutBtn">Proceed to Checkout</button>
+    </div>
+  </aside>
+
+  <!-- ========================================================
+       PRODUCT QUICK VIEW MODAL
+       ======================================================== -->
+  <div class="modal-overlay" id="quickViewModal">
+    <div class="product-modal">
+      <button class="modal-close-btn" id="modalCloseBtn" aria-label="Close Modal">✕</button>
+      
+      <div class="modal-gallery">
+        <img src="" id="modalMainImg" class="modal-main-img" alt="Product view" />
+        <div class="modal-thumbnails" id="modalThumbs"></div>
+      </div>
+
+      <div class="modal-details">
+        <span class="modal-category-tag" id="modalCategory">Electronics</span>
+        <h2 class="modal-title" id="modalTitle">Product Title</h2>
+        
+        <div class="product-rating-row">
+          <span class="stars" id="modalRatingStars">★★★★★</span>
+          <span class="review-count" id="modalRatingCount">4.8 (1,200 ratings)</span>
+        </div>
+
+        <div class="modal-price-box">
+          <div style="font-size: 24px; font-weight: 800; color: #b12704;" id="modalPrice">$0.00</div>
+          <div style="font-size: 13px; color: #565959;" id="modalOrigPrice">Typical: $0.00</div>
+        </div>
+
+        <p class="modal-desc" id="modalDesc"></p>
+
+        <h4 style="font-size: 14px; margin-bottom: 8px;">About this item:</h4>
+        <ul class="modal-features-list" id="modalFeatures"></ul>
+
+        <div class="modal-actions">
+          <button class="btn-add-cart" id="modalAddToCartBtn">Add to Cart</button>
+          <button class="btn-modal-buy" id="modalBuyNowBtn">Buy Now</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       SIDEBAR "ALL" HAMBURGER DRAWER
+       ======================================================== -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
+  <aside class="sidebar-drawer" id="sidebarDrawer">
+    <div class="sidebar-header">
+      <span>👤</span> Hello, Aditya
+    </div>
+    <div class="sidebar-content">
+      <div class="sidebar-section-title">Trending & Deals</div>
+      <div class="sidebar-item" data-cat="All">🔥 Best Sellers <span>›</span></div>
+      <div class="sidebar-item" data-cat="All">⚡ Today's Lightning Deals <span>›</span></div>
+      <div class="sidebar-item" data-cat="All">✨ New Releases <span>›</span></div>
+
+      <div class="sidebar-divider"></div>
+
+      <div class="sidebar-section-title">Shop by Category</div>
+      <div class="sidebar-item" data-cat="Electronics">📱 Electronics & Audio <span>›</span></div>
+      <div class="sidebar-item" data-cat="Computers">💻 Laptops & Accessories <span>›</span></div>
+      <div class="sidebar-item" data-cat="Gaming">🎮 Video Games & Consoles <span>›</span></div>
+      <div class="sidebar-item" data-cat="Fashion">👟 Fashion & Footwear <span>›</span></div>
+      <div class="sidebar-item" data-cat="Home & Kitchen">🍳 Home & Kitchen Essentials <span>›</span></div>
+
+      <div class="sidebar-divider"></div>
+
+      <div class="sidebar-section-title">Help & Settings</div>
+      <div class="sidebar-item">Your Account</div>
+      <div class="sidebar-item">Customer Service</div>
+      <div class="sidebar-item">Sign Out</div>
+    </div>
+  </aside>
+  <button class="sidebar-close-btn" id="sidebarCloseBtn">✕</button>
+
+  <!-- ========================================================
+       LOCATION CHANGE MODAL
+       ======================================================== -->
+  <div class="modal-overlay" id="locationModal">
+    <div class="loc-modal-card">
+      <button class="modal-close-btn" id="locationModalClose" style="top: 10px; right: 14px;">✕</button>
+      <h3 style="font-size: 17px; font-weight: 700; margin-bottom: 8px;">Choose your location</h3>
+      <p style="font-size: 13px; color: #555;">Delivery options and speeds may vary based on your location.</p>
+      
+      <div class="loc-input-group">
+        <input type="text" class="loc-input" id="locZipInput" placeholder="Enter US ZIP code (e.g. 90210)" maxlength="5" />
+        <button class="loc-apply-btn" id="locApplyBtn">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       FOOTER
+       ======================================================== -->
+  <footer class="footer">
+    <div class="footer-back-to-top" id="backToTopBtn">
+      Back to top
+    </div>
+
+    <div class="footer-links-grid">
+      <div>
+        <h4 class="footer-col-title">Get to Know Us</h4>
+        <ul class="footer-links">
+          <li><a href="#" class="footer-link">About ShopZone</a></li>
+          <li><a href="#" class="footer-link">Careers</a></li>
+          <li><a href="#" class="footer-link">Press Releases</a></li>
+          <li><a href="#" class="footer-link">ShopZone Science</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h4 class="footer-col-title">Connect with Us</h4>
+        <ul class="footer-links">
+          <li><a href="#" class="footer-link">Facebook</a></li>
+          <li><a href="#" class="footer-link">Twitter</a></li>
+          <li><a href="#" class="footer-link">Instagram</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h4 class="footer-col-title">Make Money with Us</h4>
+        <ul class="footer-links">
+          <li><a href="#" class="footer-link">Sell on ShopZone</a></li>
+          <li><a href="#" class="footer-link">Protect and Build Your Brand</a></li>
+          <li><a href="#" class="footer-link">ShopZone Global Selling</a></li>
+          <li><a href="#" class="footer-link">Supply to ShopZone</a></li>
+          <li><a href="#" class="footer-link">Become an Affiliate</a></li>
+        </ul>
+      </div>
+
+      <div>
+        <h4 class="footer-col-title">Let Us Help You</h4>
+        <ul class="footer-links">
+          <li><a href="#" class="footer-link">Your Account</a></li>
+          <li><a href="#" class="footer-link">Returns Centre</a></li>
+          <li><a href="#" class="footer-link">Recalls and Product Safety Alerts</a></li>
+          <li><a href="#" class="footer-link">100% Purchase Protection</a></li>
+          <li><a href="#" class="footer-link">ShopZone App Download</a></li>
+          <li><a href="#" class="footer-link">Help</a></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer-middle">
+      <div class="logo-text" style="font-size: 20px;">
+        <span>ShopZone</span><span class="logo-dot">.</span><span class="logo-domain">in</span>
+      </div>
+      <div class="footer-pill-btn">🌐 English</div>
+      <div class="footer-pill-btn">$ USD - U.S. Dollar</div>
+      <div class="footer-pill-btn">🇺🇸 United States</div>
+    </div>
+
+    <div class="footer-bottom">
+      <div class="footer-legal-links">
+        <a href="#">Conditions of Use</a>
+        <a href="#">Privacy Notice</a>
+        <a href="#">Consumer Health Data Privacy Disclosure</a>
+        <a href="#">Your Ads Privacy Choices</a>
+      </div>
+      <p>© 2026, ShopZone.com, Inc. or its affiliates. All rights reserved.</p>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script src="js/products.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
