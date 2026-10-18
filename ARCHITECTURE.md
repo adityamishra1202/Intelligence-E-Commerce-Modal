@@ -1,5 +1,85 @@
 # EcommerceAI — Architecture
 
+## Overview
+
+```
+Browser (React, frontend/)  --/api-->  Django REST views (thin)
+                                          |
+                                ChatOrchestrator (assistant/services)
+            scope_guard -> RequirementsService (LLM, JSON) -> merge with memory
+            -> currency_policy -> HybridSearchService
+                   ProductSearchService (hard filters, ORM + code)
+                   SemanticSearchService (pgvector, ranking only)
+            -> answer: GroundedResponseService | ComparisonService | SearchDiagnostics
+            -> answer_validator -> alternatives -> freshness notices
+            -> one short transaction: conversation, 2 messages, memory
+PostgreSQL + pgvector  <--  ingestion/ SyncService  <--  connectors (json_file, http_json, shopzone)
+```
+
+## Apps
+
+| App | Responsibility |
+|---|---|
+| `assistant` | chat API, orchestration, search, model calls, embeddings, health check |
+| `products` | `Product` model, product list API |
+| `websites` | `Website` model (connector settings, sync status), website list API |
+| `conversations` | `Conversation` (owner_key, website_scope, memory) and `Message`, read APIs |
+| `ingestion` | canonical product model, normalizers, connectors, `SyncService`, `SyncRun`, sync commands |
+
+## Chat flow rules
+
+- **Scope guard first.** Requests for code, essays and the like are redirected and
+  greetings answered without any model call. Memory is not changed.
+- **Extraction.** The model returns JSON validated by pydantic. Invalid output gets one
+  stricter retry, then a deterministic heuristic, then a clarifying question. Provider
+  errors become HTTP 503 `model_unavailable`.
+- **Memory.** The conversation stores the current requirements; follow-ups are merged
+  deterministically (budget changes, brand change/removal, feature removal, "remove
+  the budget"). General questions and out-of-scope requests never change memory.
+- **Currency.** A stated currency filters; one currency in scope is used; several
+  currencies in scope trigger one question listing the codes. Never converted.
+- **Hard filters in code.** Website scope, budget, currency, stock, rating, brand
+  (whole word; title fallback when brand is empty), product type and required features
+  are applied before any ranking. Semantic similarity only reorders for
+  `sort_by=relevance`; an explicit sort (price, rating) is never reordered. If the
+  embedding model is down, search falls back to standard ranking with a notice.
+- **No matches.** `SearchDiagnostics` names the first requirement that removes all
+  products and the single easiest change. No model call; no non-matching products.
+- **Alternatives.** At most 3, each failing exactly one of min rating, budget (+15% max)
+  or one feature; returned separately with `unmet`.
+- **Comparison.** Rows and facts (cheapest, best rated, most reviewed) computed in
+  code, within one currency, cross-website price facts only for fresh data. The model
+  only explains it.
+- **Validation.** Every price, rating and URL in a generated answer must come from the
+  records (or the user's own budget/rating). Otherwise a deterministic template is used.
+- **Persistence.** All model and search work runs outside transactions; one short
+  transaction saves the conversation, both messages and memory. A failure saves nothing.
+- **Ownership.** `owner_key` is the Django session key. Other sessions get 404.
+  `ScopedRateThrottle` scope `chat` limits requests.
+
+## Data and sync
+
+- `Product` is unique per `(website, external_product_id)`; has `content_hash` and
+  `last_seen_at`; indexes on `(website, is_available)`, `price`, `rating`.
+- `SyncService.run(website, dry_run)` fetches through the website's connector,
+  normalizes to `CanonicalProduct`, and upserts: unchanged hash = no write; products
+  missing from a successful fetch are marked unavailable (never deleted); a suspicious
+  shrink (>10 active products and <50% fetched) deactivates nothing and ends `partial`.
+  Embeddings are refreshed only when the embedding text changes (price, currency and
+  rating are not part of it). Every run is recorded as a `SyncRun`.
+- A website is **stale** when never synced or last synced more than `STALE_AFTER_HOURS` ago.
+
+## Security
+
+- Settings from the environment; `DEBUG` off by default; secret key required in production.
+- `nosniff`, `X-Frame-Options: DENY`, HttpOnly + SameSite=Lax cookies, secure cookies,
+  SSL redirect and HSTS with `DJANGO_HTTPS=true`. `check --deploy` leaves only the HSTS
+  preload warning, which is deliberately left to the operator.
+- Product text is treated as data in every prompt. Logs record error types, never request
+  bodies, prompts or keys.
+- The UI renders answers with its own small renderer (no `dangerouslySetInnerHTML`) and
+  links only http(s) URLs.
+
 ## API contract
 
 All endpoints are JSON. Errors always have the shape
@@ -72,3 +152,9 @@ first. 404 `conversation_not_found` unless the conversation belongs to this sess
 ### GET /api/products/
 
 The original product list endpoint (paginated, 10 per page), unchanged apart from `brand`.
+
+### GET /api/health/
+
+`{status: ok|degraded|error, database: ok|unavailable, ollama: ok|unavailable}`.
+`degraded` (HTTP 200) when Ollama is unreachable; `error` (HTTP 503) when the database is.
+No URLs, versions or secrets are returned.
