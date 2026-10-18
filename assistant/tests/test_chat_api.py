@@ -217,3 +217,34 @@ class ChatThrottleTests(ChatAPITestBase):
         self.assertEqual(codes[:2], [200, 200])
         self.assertEqual(response.status_code, 429)
         self.assertEqual(response.json()["code"], "rate_limited")
+
+
+class ChatFreshnessTests(ChatAPITestBase):
+    def test_never_synced_website_gets_notice(self):
+        data = self.chat("Suggest headphones under $350").json()
+        self.assertEqual(data["website_freshness"][0]["website_id"], self.usd)
+        self.assertTrue(data["website_freshness"][0]["stale"])
+        self.assertIsNone(data["website_freshness"][0]["last_synced_at"])
+        self.assertIn("Data for Alpha Store has never been synced.", data["notices"])
+
+    def test_fresh_website_has_no_notice(self):
+        from django.utils import timezone
+
+        from websites.models import Website
+
+        Website.objects.filter(id=self.usd).update(last_synced_at=timezone.now())
+        data = self.chat("Suggest headphones under $350").json()
+        self.assertFalse(data["website_freshness"][0]["stale"])
+        self.assertFalse(any("Data for" in n for n in data["notices"]))
+
+    def test_stale_website_says_when(self):
+        from datetime import timedelta
+
+        from django.utils import timezone
+
+        from websites.models import Website
+
+        Website.objects.filter(id=self.usd).update(last_synced_at=timezone.now() - timedelta(days=3))
+        data = self.chat("Suggest headphones under $350").json()
+        self.assertTrue(data["website_freshness"][0]["stale"])
+        self.assertIn("Data for Alpha Store was last updated 3\xa0days ago.", data["notices"])

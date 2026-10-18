@@ -20,7 +20,7 @@ The work was done outside the owner's machine, in a Linux sandbox:
 | 1 | Verify the backend as it is | tested | see Phase 1 below |
 | 2 | Test harness and baseline tests | tested | `manage.py test`: 76 tests, OK (expected failures=12) |
 | 3 | Backend correctness and reliability | tested | 114 tests OK, 0 expected failures; two-turn smoke test passes |
-| 4 | Connector framework and sync | not_started | |
+| 4 | Connector framework and sync | tested | 172 tests OK; `sync_website --dry-run` verified |
 | 5 | Onboard existing websites | not_started | |
 | 6 | Comparison, alternatives, answer quality | not_started | |
 | 7 | Read APIs for the UI | not_started | |
@@ -139,3 +139,20 @@ Decisions and notes:
 - **Conversation owners.** Conversations created before 3.10 have `owner_key = ''` and are reachable only through the Django admin.
 - **Model size.** `qwen2.5:0.5b-instruct` is very small, and REL-1 could not be re-tested against it here. If extraction quality stays poor, try `LLM_PROVIDER=groq` or a larger Ollama model (for example `qwen2.5:3b-instruct`). The provider was not changed.
 - **Prompt size.** The answer prompt now holds at most 8 products (all matches are still returned as product cards). This speeds up the answer call.
+
+## Phase 4 — Connector framework and sync
+
+| Step | Status | Evidence |
+|---|---|---|
+| 4.1 Website/Product sync fields, SyncRun | tested | migrations `websites.0002`, `products.0004`, `ingestion.0001` (dry-run reviewed first); `Product.currency` no longer defaults to INR (DATA-3) |
+| 4.2 CanonicalProduct and normalizers | tested | pydantic model; http(s) URLs only; `content_hash`; brand derived from `ingestion/data/brands.json` |
+| 4.3 Connectors | tested | `json_file`, `http_json` (page/cursor pagination, bounded retries with Retry-After, secrets from env var names), `shopzone` adapter; registry |
+| 4.4 SyncService | tested | idempotent upsert by `(website, external_product_id)`; unchanged hash -> no write; missing products deactivated, never deleted; shrink guard (>10 active and <50% fetched -> `partial`, nothing deactivated); one website's failure never touches another |
+| 4.5 Embedding text | tested | price, currency and rating removed from embedding text (DATA-4); a price change does not re-embed |
+| 4.6 Commands and freshness | tested | `sync_website --website-id N [--dry-run]`, `sync_all`, `export_website_json`; `import_shopzone` now calls SyncService; chat response carries `website_freshness` and a notice for stale or never-synced websites |
+
+Verification: `manage.py sync_website --website-id 1 --dry-run` on the sandbox ShopZone row (still `connector_type=manual` before Phase 5) ends with a clear message: "connector_type 'manual', which cannot be synced. Available types: http_json, json_file, shopzone." No product was written and `last_sync_status` was not changed by the dry run.
+
+Notes:
+- **One-time re-embed needed.** Because the embedding text changed (4.5), run `python manage.py generate_product_embeddings` once (or a real sync) on your own database so stored vectors match the new text.
+- **Scheduling.** There is no scheduler in the project. Use Windows Task Scheduler to run `python manage.py sync_all` (see CONNECTORS.md).

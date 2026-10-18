@@ -14,6 +14,7 @@ import logging
 from dataclasses import dataclass, field
 
 from django.db import transaction
+from django.utils.timesince import timesince
 
 from assistant.services.errors import (  # noqa: F401 (re-exported for the view)
     ChatError,
@@ -96,6 +97,11 @@ class ChatOrchestrator:
         # All model and search work happens here, outside any transaction.
         result = self._respond(message, website_ids, history, previous)
 
+        result.website_freshness, stale_notices = self._freshness(websites)
+        if stale_notices and result.intent in SHOPPING_INTENTS:
+            result.notices.extend(stale_notices)
+            result.answer = result.answer.rstrip() + "\n\n" + " ".join(stale_notices)
+
         result.conversation = self._save(owner_key, conversation, website_ids, message, result)
         return result
 
@@ -109,6 +115,24 @@ class ChatOrchestrator:
         if conversation is None or sorted(conversation.website_scope) != website_ids:
             raise ConversationNotFoundError()
         return conversation
+
+    @staticmethod
+    def _freshness(websites):
+        """Freshness of each selected website and a notice for stale or never-synced data."""
+        freshness, notices = [], []
+        for website in sorted(websites, key=lambda w: w.id):
+            stale = website.is_stale()
+            freshness.append({
+                "website_id": website.id,
+                "website_name": website.name,
+                "last_synced_at": website.last_synced_at.isoformat() if website.last_synced_at else None,
+                "stale": stale,
+            })
+            if website.last_synced_at is None:
+                notices.append(f"Data for {website.name} has never been synced.")
+            elif stale:
+                notices.append(f"Data for {website.name} was last updated {timesince(website.last_synced_at)} ago.")
+        return freshness, notices
 
     def _history(self, conversation):
         if conversation is None:
