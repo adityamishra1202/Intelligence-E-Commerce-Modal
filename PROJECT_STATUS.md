@@ -23,7 +23,7 @@ The work was done outside the owner's machine, in a Linux sandbox:
 | 4 | Connector framework and sync | tested | 172 tests OK; `sync_website --dry-run` verified |
 | 5 | Onboard existing websites | tested | 177 tests OK; three sandbox websites sync through connectors |
 | 6 | Comparison, alternatives, answer quality | tested | 202 tests OK |
-| 7 | Read APIs for the UI | not_started | |
+| 7 | Read APIs for the UI | tested | 210 tests OK |
 | 8 | React + Vite chat UI | not_started | |
 | 9 | Production readiness | not_started | |
 
@@ -179,3 +179,10 @@ New command `configure_website` sets connector settings without the admin (gener
 | 6.3 Follow-up quality | tested | `test_multiturn.py`: budget change, brand change and removal, rating question, comparison of previous results, constraint removal, unrelated request mid-conversation (memory kept), new conversation starts clean. |
 
 Sandbox check (stand-in model): "Which headphones under $350 are cheapest?" across three websites -> cheapest fact JBL 39.95 USD; best rated lists both 4.7 Sony listings with their websites. "Sennheiser headphones under $140" -> Sennheiser HD 450BT (149.99 USD) offered as an alternative with "Price 149.99 USD is above your budget of 140.00 USD".
+
+## Phase 7 — Read APIs for the UI
+
+| Step | Status | Evidence |
+|---|---|---|
+| 7.1 Endpoints | tested | `GET /api/websites/` (active only, `stale` flag, no connector settings), `GET /api/conversations/` (this session, newest 50, newest first, plain list), `GET /api/conversations/<id>/` (messages oldest first; 404 for any other owner). Reads never create a session. |
+| 7.2 Contract tests | tested | `websites/tests.py` (2), `conversations/tests.py` (6): shape, ownership, inactive hidden, stale flag, 404 for another owner, legacy owner-less rows unreachable. API contract section in `ARCHITECTURE.md`. |

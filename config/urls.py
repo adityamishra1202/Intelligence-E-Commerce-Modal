@@ -39,5 +39,9 @@ urlpatterns = [
 
     # Product endpoints
     path("api/products/", include("products.urls")),
+
+    # Read endpoints for the chat UI
+    path("api/websites/", include("websites.urls")),
+    path("api/conversations/", include("conversations.urls")),
 ]
 
