@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 HISTORY_LIMIT = 10
 SEARCH_LIMIT = 20
 SHOPPING_INTENTS = ("product_search", "product_comparison")
+SEMANTIC_UNAVAILABLE_NOTICE = "Semantic ranking was unavailable; results use standard ranking."
 
 
 # ---------------------------------------------------------------------------
@@ -161,11 +162,16 @@ class ChatOrchestrator:
                 requirements=requirements.model_dump(mode="json"),
             )
 
-        products = HybridSearchService().search(
+        hybrid = HybridSearchService()
+        products = hybrid.search(
             requirements=requirements,
             website_ids=website_ids,
             limit=SEARCH_LIMIT,
         )
+        notices = []
+        if not hybrid.semantic_available:
+            notices.append(SEMANTIC_UNAVAILABLE_NOTICE)
+
         answer = GroundedResponseService().generate_answer(user_message=message, products=products)
         requirements_json = requirements.model_dump(mode="json")
         return ChatResult(
@@ -174,6 +180,7 @@ class ChatOrchestrator:
             answer=answer,
             requirements=requirements_json,
             products=products,
+            notices=notices,
             remember=requirements_json,
         )
 

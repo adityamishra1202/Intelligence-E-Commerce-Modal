@@ -1,5 +1,11 @@
+import logging
+
+import requests
+
 from assistant.services.product_search_service import ProductSearchService
 from assistant.services.semantic_search_service import SemanticSearchService
+
+logger = logging.getLogger(__name__)
 
 
 class HybridSearchService:
@@ -13,6 +19,9 @@ class HybridSearchService:
     def __init__(self):
         self.product_search_service = ProductSearchService()
         self.semantic_search_service = SemanticSearchService()
+        # False after a search in which semantic ranking could not be used
+        # (for example Ollama is down). Results are then the structured order.
+        self.semantic_available = True
 
     def search(
         self,
@@ -48,11 +57,23 @@ class HybridSearchService:
             return []
 
         # Step 2: Retrieve semantic candidates from the selected websites.
-        semantic_products = self.semantic_search_service.search(
-            query=self._build_query(requirements),
-            website_ids=website_ids,
-            limit=100,
-        )
+        # Without any search terms there is nothing to rank semantically.
+        query = self._build_query(requirements)
+        if not query:
+            return filtered_products[:limit]
+
+        try:
+            semantic_products = self.semantic_search_service.search(
+                query=query,
+                website_ids=website_ids,
+                limit=100,
+            )
+        except (RuntimeError, requests.RequestException, ValueError) as exc:
+            # Never fail the chat because embeddings are unavailable; keep the
+            # structured results. Log the exception type only (no payloads).
+            logger.warning("Semantic ranking unavailable (%s); using structured order.", type(exc).__name__)
+            self.semantic_available = False
+            return filtered_products[:limit]
 
         # Step 3: Create a map of semantic rankings.
         semantic_ranks = {

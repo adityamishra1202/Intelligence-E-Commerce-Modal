@@ -54,7 +54,6 @@ class HybridSearchTests(TestCase):
     def test_no_structured_results_means_no_results(self):
         self.assertEqual(self.hybrid(req(category="headphones", max_price=1), [self.usd]), [])
 
-    @expectedFailure  # flips in Phase 3.2 (semantic fallback)
     def test_semantic_failure_falls_back_to_structured(self):
         r = req(category="headphones")
         with patch_embeddings(side_effect=RuntimeError("Ollama down")):

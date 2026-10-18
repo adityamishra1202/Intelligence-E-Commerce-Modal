@@ -114,10 +114,17 @@ class ChatFlowTests(ChatAPITestBase):
         self.chat("Suggest headphones under $350", llm=connection_error())
         self.assertEqual((Conversation.objects.count(), Message.objects.count()), before)
 
-    @expectedFailure  # flips in Phase 3.2 (empty semantic query, API-7)
     def test_request_without_search_terms_does_not_fail(self):
         response = self.chat("show me something", llm=route(extraction()))
         self.assertEqual(response.status_code, 200)
+
+    def test_embedding_outage_adds_notice_and_still_answers(self):
+        body = {"message": "Suggest headphones under $350", "website_ids": [self.usd]}
+        with patch_llm(default=route(HEADPHONES)), patch_embeddings(side_effect=RuntimeError("Ollama down")):
+            response = self.client.post(URL, body, format="json")
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.json()["products"])
+        self.assertIn("Semantic ranking was unavailable; results use standard ranking.", response.json()["notices"])
 
     @expectedFailure  # flips in Phase 3.8 (model_unavailable)
     def test_provider_unreachable_is_503(self):
