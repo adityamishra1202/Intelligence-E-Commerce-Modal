@@ -15,9 +15,10 @@ from dataclasses import dataclass, field
 
 from django.db import transaction
 
+from assistant.services.currency_policy import currency_from_reply, decide_currency
 from assistant.services.grounded_response_service import GroundedResponseService
 from assistant.services.hybrid_search_service import HybridSearchService
-from assistant.services.requirements_service import RequirementsService
+from assistant.services.requirements_service import RequirementsService, ShoppingRequirements
 from conversations.models import Conversation, Message
 from websites.models import Website
 
@@ -131,17 +132,16 @@ class ChatOrchestrator:
     # -- the turn ------------------------------------------------------------
 
     def _respond(self, message, website_ids, history, previous):
-        requirements_service = RequirementsService()
-        requirements = requirements_service.extract(
-            user_message=message,
-            conversation_history=history,
-        )
-        if previous:
-            requirements = requirements_service.merge_requirements(
-                previous_requirements=previous,
-                new_requirements=requirements,
-                user_message=message,
-            )
+        pending = previous.pop("awaiting", None)
+        options = previous.pop("currency_options", [])
+
+        # The previous turn asked which currency to use; a reply that names one
+        # of the offered currencies resumes that search without a model call.
+        chosen = currency_from_reply(message, options) if pending == "currency" else None
+        if chosen:
+            requirements = ShoppingRequirements.model_validate({**previous, "currency": chosen})
+        else:
+            requirements = self._extract(message, history, previous)
 
         if requirements.intent == "general_question":
             return ChatResult(
@@ -161,6 +161,21 @@ class ChatOrchestrator:
                 answer="Could you clarify what kind of product you're looking for?",
                 requirements=requirements.model_dump(mode="json"),
             )
+
+        decision = decide_currency(requirements, website_ids)
+        if decision.clarification:
+            # Keep the shopping request in memory so the reply can resume it.
+            pending_memory = requirements.model_dump(mode="json")
+            pending_memory.update(awaiting="currency", currency_options=decision.options)
+            return ChatResult(
+                message=message,
+                intent="clarification_needed",
+                answer=decision.clarification,
+                requirements=requirements.model_dump(mode="json"),
+                remember=pending_memory,
+            )
+        if decision.currency and not requirements.currency:
+            requirements = requirements.model_copy(update={"currency": decision.currency})
 
         hybrid = HybridSearchService()
         products = hybrid.search(
@@ -183,6 +198,20 @@ class ChatOrchestrator:
             notices=notices,
             remember=requirements_json,
         )
+
+    def _extract(self, message, history, previous):
+        requirements_service = RequirementsService()
+        requirements = requirements_service.extract(
+            user_message=message,
+            conversation_history=history,
+        )
+        if previous:
+            requirements = requirements_service.merge_requirements(
+                previous_requirements=previous,
+                new_requirements=requirements,
+                user_message=message,
+            )
+        return requirements
 
     # -- saving --------------------------------------------------------------
 
