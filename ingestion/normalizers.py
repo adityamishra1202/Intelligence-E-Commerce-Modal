@@ -97,19 +97,20 @@ def load_brand_list():
 
 def derive_brand(title, brand_list=None):
     """
-    The longest known brand that appears as a whole word (or phrase) in the
-    title; ties go to the brand that appears first. '' when none matches.
+    Brand from the title using the known-brand list (whole words only):
+    a brand at the start of the title wins; otherwise the longest brand found
+    anywhere in the title (ties: the one that appears first). '' if none.
     """
     if not title:
         return ""
     brand_list = load_brand_list() if brand_list is None else brand_list
-    lower = title.lower()
+    lower = title.lower().lstrip()
     best = None
     for brand in brand_list:
         pattern = re.compile(r"(?<![a-z0-9])" + re.escape(brand.lower()) + r"(?![a-z0-9])")
         match = pattern.search(lower)
         if match:
-            key = (len(brand), -match.start())
+            key = (match.start() == 0, len(brand), -match.start())
             if best is None or key > best[0]:
                 best = (key, brand)
     return best[1] if best else ""

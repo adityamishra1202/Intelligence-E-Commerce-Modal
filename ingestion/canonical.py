@@ -37,6 +37,9 @@ class CanonicalProduct(BaseModel):
     images: list[str] = Field(default_factory=list)
     features: list[str] = Field(default_factory=list)
     specifications: dict = Field(default_factory=dict)
+    # Optional storefront flags that Product already stores.
+    is_prime: bool | None = None
+    badge: str = Field(default="", max_length=100)
 
     @field_validator("external_product_id", "title", mode="before")
     @classmethod
@@ -47,6 +50,11 @@ class CanonicalProduct(BaseModel):
     @classmethod
     def _title_length(cls, value):
         return value[:300]
+
+    @field_validator("badge", mode="before")
+    @classmethod
+    def _badge(cls, value):
+        return strip_html(value)[:100]
 
     @field_validator("brand", "category", mode="before")
     @classmethod

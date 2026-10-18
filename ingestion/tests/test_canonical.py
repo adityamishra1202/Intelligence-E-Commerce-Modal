@@ -102,6 +102,8 @@ class NormalizerTests(SimpleTestCase):
         self.assertEqual(derive_brand("Bang & Olufsen Beoplay H95", brands), "Bang & Olufsen")
         self.assertEqual(derive_brand("Nespresso VertuoPlus by De'Longhi", brands), "Nespresso")
         self.assertEqual(derive_brand("Sonya Wireless Headphones", brands), "")
+        self.assertEqual(derive_brand("Sony WH-1000XM5 Noise Canceling", brands + ["Noise"]), "Sony")
+        self.assertEqual(derive_brand("Wireless Earbuds by Sony", brands), "Sony")
         self.assertEqual(derive_brand("Ceramic Plant Pot Set", brands), "")
 
     def test_default_brand_list_loads(self):

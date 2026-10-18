@@ -1,5 +1,5 @@
 {
-  "_about": "Generic list of well-known consumer brands used to derive Product.brand from titles. Not tied to any website. Add brands as needed.",
+  "_about": "Generic list of well-known consumer brands used to derive Product.brand from titles. Not tied to any website. Add brands as needed. Avoid brands that are also everyday words (they would be found in unrelated titles).",
   "brands": [
     "Acer",
     "Adidas",
@@ -59,7 +59,6 @@
     "Nike",
     "Nikon",
     "Nintendo",
-    "Noise",
     "Nokia",
     "OnePlus",
     "Oppo",
@@ -75,7 +74,6 @@
     "SanDisk",
     "Seagate",
     "Sennheiser",
-    "Sharp",
     "Skechers",
     "Skullcandy",
     "Sony",
