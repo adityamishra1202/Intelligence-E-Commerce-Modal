@@ -1,6 +1,4 @@
 """ProductSearchService: hard filters, matching and sorting."""
-from unittest import expectedFailure
-
 from django.test import TestCase
 
 from assistant.services.product_search_service import ProductSearchService
@@ -87,7 +85,6 @@ class ProductSearchTests(TestCase):
         self.assertIn(self.c["sony_xm5"].id, self.ids(results))
         self.assertNotIn(self.c["bose_qc"].id, self.ids(results))
 
-    @expectedFailure  # flips in Phase 3.4 (brand matching)
     def test_brand_matches_title_when_brand_field_empty(self):
         results = self.search(category="headphones", brand="Sony")
         self.assertIn(self.c["sony_noname"].id, self.ids(results))
@@ -129,7 +126,6 @@ class ProductSearchTests(TestCase):
     def test_empty_result(self):
         self.assertEqual(self.search(category="television"), [])
 
-    @expectedFailure  # flips in Phase 3.4 (product fields)
     def test_result_contains_api_contract_fields(self):
         result = self.search(category="laptop")[0]
         for key in ("id", "website_id", "website_name", "title", "brand", "category", "description",

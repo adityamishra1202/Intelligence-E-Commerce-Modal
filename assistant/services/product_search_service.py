@@ -1,9 +1,57 @@
-from django.db.models import Q
+import re
 
 from products.models import Product
 from assistant.services.requirements_service import (
     ShoppingRequirements,
 )
+
+
+def _word_pattern(text):
+    """Whole-word, case-insensitive match that also works for brands like 'Audio-Technica'."""
+    return re.compile(r"(?<![a-z0-9])" + re.escape(text.strip().lower()) + r"(?![a-z0-9])")
+
+
+def brand_matches(product, requested):
+    """
+    Brand rule (case-insensitive, whole word):
+    - if the product has a brand, the requested brand must match it;
+    - if the brand field is empty, the requested brand must appear in the title.
+    """
+    if not requested or not requested.strip():
+        return True
+    pattern = _word_pattern(requested)
+    brand = (product.brand or "").strip().lower()
+    if brand:
+        return bool(pattern.search(brand))
+    return bool(pattern.search((product.title or "").lower()))
+
+
+def _number(value):
+    return float(value) if value is not None else None
+
+
+def product_to_dict(product):
+    """The Product object returned by every API (see the API contract)."""
+    return {
+        "id": product.id,
+        "website_id": product.website_id,
+        "website_name": product.website.name,
+        "title": product.title,
+        "brand": product.brand,
+        "category": product.category,
+        "description": product.description,
+        "price": str(product.price),
+        "original_price": str(product.original_price) if product.original_price is not None else None,
+        "currency": product.currency,
+        "rating": _number(product.rating),
+        "review_count": product.review_count,
+        "is_available": product.is_available,
+        "product_url": product.product_url,
+        "image_url": product.image_url,
+        "features": product.features,
+        "specifications": product.specifications,
+        "last_fetched_at": product.last_fetched_at.isoformat() if product.last_fetched_at else None,
+    }
 
 
 class ProductSearchService:
@@ -272,9 +320,8 @@ class ProductSearchService:
             # Brand is a hard constraint when explicitly asked
             # ----------------------------------------------
 
-            if requested_brand:
-                if requested_brand not in brand:
-                    continue
+            if requested_brand and not brand_matches(product, requested_brand):
+                continue
 
             # ----------------------------------------------
             # Category matching
@@ -442,25 +489,6 @@ class ProductSearchService:
         # --------------------------------------------------
 
         return [
-            {
-                "id": product.id,
-                "website_id": product.website_id,
-                "website_name": product.website.name,
-                "title": product.title,
-                "brand": product.brand,
-                "category": product.category,
-                "price": str(product.price),
-                "currency": product.currency,
-                "rating": (
-                    float(product.rating)
-                    if product.rating is not None
-                    else None
-                ),
-                "is_available": product.is_available,
-                "product_url": product.product_url,
-                "image_url": product.image_url,
-                "features": product.features,
-                "specifications": product.specifications,
-            }
+            product_to_dict(product)
             for score, product in scored_products[:limit]
         ]

@@ -146,3 +146,10 @@ class ProductListAPITests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.data["count"], 0)
+
+    def test_product_list_includes_brand(self):
+        self.headphones.brand = "Sony"
+        self.headphones.save()
+        response = self.get_products(website_id=self.shopzone.id, search="Sony")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["results"][0]["brand"], "Sony")

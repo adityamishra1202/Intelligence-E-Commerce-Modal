@@ -18,6 +18,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "website_name",
             "external_product_id",
             "title",
+            "brand",
             "description",
             "category",
             "price",
