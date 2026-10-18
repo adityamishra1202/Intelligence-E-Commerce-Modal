@@ -1,5 +1,5 @@
 """HybridSearchService: semantic ranking may only reorder structured results."""
-from unittest import expectedFailure, mock
+from unittest import mock
 
 from django.test import TestCase
 
@@ -60,7 +60,6 @@ class HybridSearchTests(TestCase):
             results = HybridSearchService().search(r, [self.usd], limit=20)
         self.assertEqual([p["id"] for p in results], [p["id"] for p in self.structured(r, [self.usd])][:20])
 
-    @expectedFailure  # flips in Phase 3.3 (explicit sort wins)
     def test_explicit_sort_is_not_reordered_by_semantics(self):
         r = req(category="headphones", sort_by="price_ascending")
         structured = self.structured(r, [self.usd])

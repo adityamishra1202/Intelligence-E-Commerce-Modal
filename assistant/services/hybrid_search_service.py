@@ -56,6 +56,17 @@ class HybridSearchService:
         if not filtered_products:
             return []
 
+        # An explicit sort (price or rating) is the user's instruction; return
+        # the structured order unchanged. Semantic blending is used only for
+        # relevance ordering.
+        sort_by = (
+            requirements.get("sort_by", "relevance")
+            if isinstance(requirements, dict)
+            else requirements.sort_by
+        )
+        if sort_by != "relevance":
+            return filtered_products[:limit]
+
         # Step 2: Retrieve semantic candidates from the selected websites.
         # Without any search terms there is nothing to rank semantically.
         query = self._build_query(requirements)
