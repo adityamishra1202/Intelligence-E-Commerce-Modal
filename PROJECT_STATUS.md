@@ -25,7 +25,7 @@ The work was done outside the owner's machine, in a Linux sandbox:
 | 6 | Comparison, alternatives, answer quality | tested | 202 tests OK |
 | 7 | Read APIs for the UI | tested | 210 tests OK |
 | 8 | React + Vite chat UI | tested | `npm run build` OK; browser scenario passed (sandbox, stand-in model) |
-| 9 | Production readiness | not_started | |
+| 9 | Production readiness | tested | 213 tests OK from a clean checkout; check --deploy clean except HSTS preload |
 
 ## Phase 0 — Hygiene, configuration, test database
 
@@ -198,3 +198,25 @@ Sandbox check (stand-in model): "Which headphones under $350 are cheapest?" acro
 | 8.5 End-to-end scenario | tested (sandbox) | Django + Vite running, Chromium driven by a script outside the project. GadgetMart selected (ShopZone has only one headphone, so a rating comparison needs another site): "Suggest headphones under $350" -> 3 cards; website checkboxes locked. "Which has the best rating?" -> ratings 4.7, 4.6, 4.4 and a comparison table. "Actually increase my budget to 400" -> all prices <= 400. Reload, reopen from the sidebar -> 6 messages, scope restored and locked. No internal field names, JSON or stack traces in the page text; no page errors. |
 
 Not verified: the scenario with your real Ollama model (the sandbox used a stand-in model server). Run it once on your machine.
+
+## Phase 9 — Production readiness
+
+| Step | Status | Evidence |
+|---|---|---|
+| 9.1 Security settings | tested | nosniff, X-Frame-Options DENY, HttpOnly + SameSite=Lax cookies, Referrer-Policy, explicit 2.5 MB body limit; `DJANGO_HTTPS=true` adds secure cookies, SSL redirect, proxy header, optional HSTS. Email backend is console only while debugging. `check --deploy` (DEBUG off, HTTPS on, HSTS set): only W021 (HSTS preload) remains, deliberately left to the operator because preload is hard to undo. Headers confirmed on a live response. |
+| 9.2 Indexes | tested | `products.0005_product_indexes` (website+is_available, price, rating) and `conversations.0003_message_indexes` (conversation+created_at); `makemigrations --dry-run -v 3` reviewed first: AddIndex operations only. Applied; `makemigrations --check` clean. Hard filters unchanged (suite passes). |
+| 9.3 Logging and health | tested | console LOGGING (no bodies, prompts or keys; httpx/openai at WARNING). `GET /api/health/` -> `{status, database, ollama}` with a 2-second Ollama check; 3 tests; live: `{"status":"ok","database":"ok","ollama":"ok"}` (against the sandbox stand-in). |
+| 9.4 Documentation | tested | README rewritten (old text in `docs/SHOPZONE_README.md`); ARCHITECTURE.md, CONNECTORS.md, TESTING.md. Commands in the docs were run in the sandbox (Linux), except the PowerShell and `schtasks` lines. |
+
+## Final acceptance (sandbox)
+
+- `python -m compileall`, `manage.py check`, `makemigrations --check`: pass.
+- Fresh `git clone` of the repository, Ollama URL pointed at a closed port: `manage.py test` -> 213 tests OK; `npm ci && npm run build` OK.
+- Browser scenario re-run after Phase 9: all checks pass.
+
+## Not verified here (do these on your machine)
+
+1. Your real Ollama model (sandbox used a stand-in server), including REL-1 with `qwen2.5:0.5b-instruct`.
+2. Your PostgreSQL 18 / pgvector 0.8.7 database: run `python manage.py migrate`, then `python manage.py generate_product_embeddings` once (the embedding text changed in 4.5).
+3. Onboarding your GadgetMart and TechGear rows (`ingestion/fixtures/README.md`) and configuring ShopZone (`configure_website --website-id <id> --connector-type shopzone --path products-export.json --currency USD --sync-enabled`).
+4. Windows-specific commands (PowerShell, Task Scheduler).
