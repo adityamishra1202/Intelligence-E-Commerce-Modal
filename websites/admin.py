@@ -9,7 +9,11 @@ class WebsiteAdmin(admin.ModelAdmin):
         "name",
         "base_url",
         "is_active",
-        "created_at",
+        "connector_type",
+        "default_currency",
+        "sync_enabled",
+        "last_synced_at",
+        "last_sync_status",
     )
 
     search_fields = (
@@ -19,5 +23,8 @@ class WebsiteAdmin(admin.ModelAdmin):
 
     list_filter = (
         "is_active",
+        "connector_type",
+        "sync_enabled",
     )
+    readonly_fields = ("last_synced_at", "last_sync_status")
     # //Register the models here

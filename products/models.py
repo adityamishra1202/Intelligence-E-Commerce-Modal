@@ -44,9 +44,9 @@ class Product(models.Model):
         blank=True,
     )
 
+    # Required, with no default: every source must state its currency.
     currency = models.CharField(
         max_length=3,
-        default="INR",
     )
 
     product_url = models.URLField(max_length=1000, blank=True)
@@ -108,6 +108,18 @@ class Product(models.Model):
     )
 
     last_verified_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    # sha256 of the canonical record; a sync only writes when it changes.
+    content_hash = models.CharField(
+        max_length=64,
+        blank=True,
+    )
+
+    # Last time a sync saw this product in its source.
+    last_seen_at = models.DateTimeField(
         null=True,
         blank=True,
     )
