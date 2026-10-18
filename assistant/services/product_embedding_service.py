@@ -14,6 +14,17 @@ class ProductEmbeddingService:
         self.embedding_service = EmbeddingService()
         self.product_text_service = ProductTextService()
 
+    def needs_embedding(self, product):
+        """True when the product has no embedding or its embedding text/model changed."""
+        product_text = self.product_text_service.build_product_text(product)
+        source_hash = hashlib.sha256(product_text.encode("utf-8")).hexdigest()
+        existing = ProductEmbedding.objects.filter(product=product).first()
+        return not (
+            existing
+            and existing.source_text_hash == source_hash
+            and existing.embedding_model == self.embedding_service.model
+        )
+
     def generate_for_product(self, product, force=False):
         """
         Generate or update the embedding for one product.
