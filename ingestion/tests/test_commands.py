@@ -95,3 +95,24 @@ class CommandTests(SyncTestBase):
         with mock.patch.dict(os.environ, {"SHOPZONE_BASE_URL": "", "SHOPZONE_CURRENCY": ""}):
             with self.assertRaises(CommandError):
                 self.call("import_shopzone")
+
+
+class ConfigureWebsiteTests(SyncTestBase):
+    def test_configure_then_sync(self):
+        self.write([record(1)])
+        site = Website.objects.create(name="Manual", base_url="https://manual.example.com")
+        out = StringIO()
+        call_command("configure_website", "--website-id", str(site.id), "--connector-type", "json_file",
+                     "--path", self.path, "--config-json", '{"field_map": {"external_product_id": "id"}}',
+                     "--currency", "usd", "--sync-enabled", stdout=out)
+        site.refresh_from_db()
+        self.assertEqual((site.connector_type, site.default_currency, site.sync_enabled), ("json_file", "USD", True))
+        self.assertEqual(site.connector_config["path"], self.path)
+        self.assertEqual(self.sync(site).created_count, 1)
+
+    def test_rejects_unknown_type_and_bad_currency(self):
+        site = Website.objects.create(name="Manual", base_url="https://manual.example.com")
+        with self.assertRaises(CommandError):
+            call_command("configure_website", "--website-id", str(site.id), "--connector-type", "ftp", stdout=StringIO())
+        with self.assertRaises(CommandError):
+            call_command("configure_website", "--website-id", str(site.id), "--currency", "dollars", stdout=StringIO())

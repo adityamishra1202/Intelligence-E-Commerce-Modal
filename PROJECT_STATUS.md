@@ -21,7 +21,7 @@ The work was done outside the owner's machine, in a Linux sandbox:
 | 2 | Test harness and baseline tests | tested | `manage.py test`: 76 tests, OK (expected failures=12) |
 | 3 | Backend correctness and reliability | tested | 114 tests OK, 0 expected failures; two-turn smoke test passes |
 | 4 | Connector framework and sync | tested | 172 tests OK; `sync_website --dry-run` verified |
-| 5 | Onboard existing websites | not_started | |
+| 5 | Onboard existing websites | tested | 177 tests OK; three sandbox websites sync through connectors |
 | 6 | Comparison, alternatives, answer quality | not_started | |
 | 7 | Read APIs for the UI | not_started | |
 | 8 | React + Vite chat UI | not_started | |
@@ -156,3 +156,16 @@ Verification: `manage.py sync_website --website-id 1 --dry-run` on the sandbox S
 Notes:
 - **One-time re-embed needed.** Because the embedding text changed (4.5), run `python manage.py generate_product_embeddings` once (or a real sync) on your own database so stored vectors match the new text.
 - **Scheduling.** There is no scheduler in the project. Use Windows Task Scheduler to run `python manage.py sync_all` (see CONNECTORS.md).
+
+## Phase 5 — Onboard existing websites
+
+| Step | Status | Evidence |
+|---|---|---|
+| 5.1 ShopZone | tested (sandbox DB) | `configure_website --website-id 1 --connector-type shopzone --path products-export.json --currency <SHOPZONE_CURRENCY> --sync-enabled`; dry run: updated 12, unchanged 4, created 0; real run the same; second run: unchanged 16. 16 rows, 0 duplicate ids. Brands filled for 12/16 (DATA-1); the 4 left empty have no brand word in the title (PlayStation 5, Kindle, a watch, a plant pot) and are not guessed. product_url stays empty (DATA-2): products-export.json has no URL field and the ShopZone page opens products in a quick-view modal, so there is no real product page scheme and no `url_template` was set. |
+| 5.2 GadgetMart, TechGear Store | tested (sandbox stand-ins) | `export_website_json` -> `ingestion/fixtures/website-<id>.json`, `configure_website ... --connector-type json_file`; GadgetMart dry run and real run: unchanged 4. TechGear: 1 updated (empty brand filled with "Sennheiser" from the title), then unchanged 3. Embedding count unchanged (23). |
+| 5.3 Multi-site chat | tested | All three selected, "Suggest Sony headphones under $350": 3 Sony results, one per site (ShopZone's Sony now matches, DATA-1). Only GadgetMart selected: 1 result. Currency inferred as USD because every in-scope product is USD; mixed-currency clarification is covered by tests (USD + INR catalog). `website_freshness` lists each selected site. Integration tests: sync from a temporary JSON file then chat; a price change in the source reaches the next chat with no re-embed; scope isolation. |
+
+Done-when evidence: `test_fourth_json_website_needs_only_configuration` creates a new website with only a Website row and a `field_map`, syncs it and finds its products through chat.
+
+**Your database:** the sandbox GadgetMart and TechGear rows are stand-ins, so their fixture files are not shipped. Run the commands in `ingestion/fixtures/README.md` on your own database.
+New command `configure_website` sets connector settings without the admin (generic; no site names in code).
