@@ -1,0 +1,198 @@
+"""
+The whole chat flow. assistant/views.py only validates input and maps errors.
+
+Order of work:
+1. validate the selected websites;
+2. load the conversation (a new one is NOT saved yet) and its last messages;
+3. run all model and search work with no database transaction open;
+4. open ONE short transaction that creates the conversation if needed, saves
+   the user and assistant messages and updates the conversation memory.
+
+If anything fails before step 4, nothing is written.
+"""
+import logging
+from dataclasses import dataclass, field
+
+from django.db import transaction
+
+from assistant.services.grounded_response_service import GroundedResponseService
+from assistant.services.hybrid_search_service import HybridSearchService
+from assistant.services.requirements_service import RequirementsService
+from conversations.models import Conversation, Message
+from websites.models import Website
+
+logger = logging.getLogger(__name__)
+
+HISTORY_LIMIT = 10
+SEARCH_LIMIT = 20
+SHOPPING_INTENTS = ("product_search", "product_comparison")
+
+
+# ---------------------------------------------------------------------------
+# Errors with a stable code and a user-safe message
+# ---------------------------------------------------------------------------
+
+class ChatError(Exception):
+    code = "internal_error"
+    status = 500
+    default_message = "EcommerceAI could not process your request. Please try again."
+
+    def __init__(self, message=None):
+        self.message = message or self.default_message
+        super().__init__(self.message)
+
+
+class WebsiteUnavailableError(ChatError):
+    code = "website_unavailable"
+    status = 400
+    default_message = "One or more requested websites do not exist or are inactive."
+
+
+class ConversationNotFoundError(ChatError):
+    code = "conversation_not_found"
+    status = 404
+    default_message = "Conversation not found or website scope does not match."
+
+
+# ---------------------------------------------------------------------------
+# Result
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ChatResult:
+    message: str
+    intent: str
+    answer: str
+    requirements: dict = field(default_factory=dict)
+    products: list = field(default_factory=list)
+    alternatives: list = field(default_factory=list)
+    comparison: dict | None = None
+    website_freshness: list = field(default_factory=list)
+    notices: list = field(default_factory=list)
+    # Requirements to store as conversation memory (None leaves memory unchanged).
+    remember: dict | None = None
+    conversation: Conversation | None = None
+
+    def as_response(self):
+        return {
+            "conversation_id": self.conversation.id if self.conversation else None,
+            "message": self.message,
+            "intent": self.intent,
+            "answer": self.answer,
+            "requirements": self.requirements,
+            "total_products": len(self.products),
+            "products": self.products,
+            "alternatives": self.alternatives,
+            "comparison": self.comparison,
+            "website_freshness": self.website_freshness,
+            "notices": self.notices,
+        }
+
+
+# ---------------------------------------------------------------------------
+# Orchestrator
+# ---------------------------------------------------------------------------
+
+class ChatOrchestrator:
+
+    def handle(self, owner_key, message, website_ids, conversation_id=None):
+        website_ids = sorted(set(website_ids))
+        websites = list(Website.objects.filter(id__in=website_ids, is_active=True))
+        if len(websites) != len(website_ids):
+            raise WebsiteUnavailableError()
+
+        conversation = self._load_conversation(owner_key, conversation_id, website_ids)
+        history = self._history(conversation)
+        previous = dict(conversation.current_requirements or {}) if conversation else {}
+
+        # All model and search work happens here, outside any transaction.
+        result = self._respond(message, website_ids, history, previous)
+
+        result.conversation = self._save(owner_key, conversation, website_ids, message, result)
+        return result
+
+    # -- loading -------------------------------------------------------------
+
+    def _load_conversation(self, owner_key, conversation_id, website_ids):
+        if conversation_id is None:
+            return None
+        conversation = Conversation.objects.filter(id=conversation_id).first()
+        if conversation is None or sorted(conversation.website_scope) != website_ids:
+            raise ConversationNotFoundError()
+        return conversation
+
+    def _history(self, conversation):
+        if conversation is None:
+            return []
+        messages = conversation.messages.order_by("-created_at", "-id").values("role", "content")
+        return list(messages[:HISTORY_LIMIT])[::-1]
+
+    # -- the turn ------------------------------------------------------------
+
+    def _respond(self, message, website_ids, history, previous):
+        requirements_service = RequirementsService()
+        requirements = requirements_service.extract(
+            user_message=message,
+            conversation_history=history,
+        )
+        if previous:
+            requirements = requirements_service.merge_requirements(
+                previous_requirements=previous,
+                new_requirements=requirements,
+                user_message=message,
+            )
+
+        if requirements.intent == "general_question":
+            return ChatResult(
+                message=message,
+                intent="general_question",
+                answer=(
+                    "I'm EcommerceAI, your shopping assistant. Ask me to find or "
+                    "compare products, and I'll search the selected product catalog."
+                ),
+                requirements=requirements.model_dump(mode="json"),
+            )
+
+        if requirements.intent == "clarification_needed":
+            return ChatResult(
+                message=message,
+                intent="clarification_needed",
+                answer="Could you clarify what kind of product you're looking for?",
+                requirements=requirements.model_dump(mode="json"),
+            )
+
+        products = HybridSearchService().search(
+            requirements=requirements,
+            website_ids=website_ids,
+            limit=SEARCH_LIMIT,
+        )
+        answer = GroundedResponseService().generate_answer(user_message=message, products=products)
+        requirements_json = requirements.model_dump(mode="json")
+        return ChatResult(
+            message=message,
+            intent=requirements.intent,
+            answer=answer,
+            requirements=requirements_json,
+            products=products,
+            remember=requirements_json,
+        )
+
+    # -- saving --------------------------------------------------------------
+
+    def _save(self, owner_key, conversation, website_ids, message, result):
+        with transaction.atomic():
+            if conversation is None:
+                conversation = Conversation.objects.create(
+                    title=message[:200],
+                    website_scope=website_ids,
+                    current_requirements={},
+                )
+            Message.objects.create(conversation=conversation, role="user", content=message)
+            Message.objects.create(conversation=conversation, role="assistant", content=result.answer)
+
+            if result.remember is not None:
+                conversation.current_requirements = result.remember
+            if conversation.title == "New conversation":
+                conversation.title = message[:200]
+            conversation.save(update_fields=["title", "current_requirements", "updated_at"])
+        return conversation

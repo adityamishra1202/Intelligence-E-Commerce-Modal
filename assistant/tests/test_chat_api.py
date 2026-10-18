@@ -69,7 +69,6 @@ class ChatValidationTests(ChatAPITestBase):
         response = self.chat("and laptops?", website_ids=[self.usd, self.inr], conversation_id=first["conversation_id"])
         self.assertEqual(response.status_code, 404)
 
-    @expectedFailure  # flips in Phase 3.1 (error codes)
     def test_error_responses_carry_codes(self):
         self.assertEqual(self.client.post(URL, {}, format="json").json().get("code"), "invalid_request")
         self.assertEqual(self.chat("x", website_ids=[99999]).json().get("code"), "website_unavailable")
@@ -110,7 +109,6 @@ class ChatFlowTests(ChatAPITestBase):
         self.assertNotIn("APIConnectionError", text)
         self.assertNotIn("11434", text)
 
-    @expectedFailure  # flips in Phase 3.1 (no partial writes)
     def test_failure_saves_nothing(self):
         before = (Conversation.objects.count(), Message.objects.count())
         self.chat("Suggest headphones under $350", llm=connection_error())
