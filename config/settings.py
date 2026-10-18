@@ -9,14 +9,17 @@ https://docs.djangoproject.com/en/6.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
-
+import os
+from dotenv import load_dotenv
 from pathlib import Path
 import environ
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env", override=True)
 
 env = environ.Env()
 environ.Env.read_env(BASE_DIR / ".env")
+
 
 
 
@@ -149,3 +152,21 @@ REST_FRAMEWORK = {
     ),
     "PAGE_SIZE": 10,
 }
+
+GROQ_API_KEY=os.getenv("GROQ_API_KEY")
+GROQ_MODEL =os.getenv("GROQ_MODEL")
+
+LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()
+
+OLLAMA_BASE_URL = os.getenv(
+    "OLLAMA_BASE_URL",
+    "http://localhost:11434/v1"
+)
+
+OLLAMA_MODEL = os.getenv(
+    "OLLAMA_MODEL",
+    "qwen2.5:0.5b-instruct"
+)
+
+OLLAMA_BASE_URL = "http://localhost:11434/v1"
+OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
