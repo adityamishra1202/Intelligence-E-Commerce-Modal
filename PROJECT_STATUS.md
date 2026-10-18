@@ -18,7 +18,7 @@ The work was done outside the owner's machine, in a Linux sandbox:
 |---|---|---|---|
 | 0 | Hygiene, configuration, test-database fix | tested | see Phase 0 below |
 | 1 | Verify the backend as it is | tested | see Phase 1 below |
-| 2 | Test harness and baseline tests | not_started | |
+| 2 | Test harness and baseline tests | tested | `manage.py test`: 76 tests, OK (expected failures=12) |
 | 3 | Backend correctness and reliability | not_started | |
 | 4 | Connector framework and sync | not_started | |
 | 5 | Onboard existing websites | not_started | |
@@ -87,3 +87,32 @@ The work was done outside the owner's machine, in a Linux sandbox:
 | CFG-1 | confirmed | hard-coded `OLLAMA_BASE_URL` override; fixed 0.3 |
 | CFG-2 | confirmed | `_init_.py` files; fixed 0.4 |
 | REL-1 | not reproduced | needs the real Ollama model; not reachable from the sandbox |
+
+## Phase 2 — Test harness and baseline tests
+
+| Step | Status | Evidence |
+|---|---|---|
+| 2.1 Test package and helpers | tested | `assistant/tests/` with `factories.py` (2 websites USD/INR, 10 products) and `fakes.py` (FakeLLM, patch_llm, fake_embed, patch_embeddings); 5 harness tests pass |
+| 2.2 ProductSearchService tests | tested | 22 tests |
+| 2.3 RequirementsService tests | tested | 14 tests (merge rules and extraction with mocked LLM) |
+| 2.4 HybridSearchService tests | tested | 6 tests (mocked embeddings) |
+| 2.5 GroundedResponseService and API tests | tested | 4 + 19 tests |
+
+No test calls a live model: every model call goes through `FakeLLM`, and embeddings through `fake_embed`.
+
+### expectedFailure tests and the step that flips each
+
+| Flips in | Test module | Behaviour |
+|---|---|---|
+| 3.1 | test_chat_api | error responses carry codes |
+| 3.1 | test_chat_api | a failed request saves nothing |
+| 3.2 | test_hybrid_search | semantic failure falls back to structured |
+| 3.2 | test_chat_api | request without search terms does not fail (API-7) |
+| 3.3 | test_hybrid_search | explicit sort is not reordered |
+| 3.4 | test_product_search | brand matches title when brand field is empty |
+| 3.4 | test_product_search | results contain the API contract fields |
+| 3.6 | test_chat_api | unrelated request redirected without LLM |
+| 3.6 | test_chat_api | general shopping question answered |
+| 3.8 | test_requirements | invalid JSON recovers |
+| 3.8 | test_chat_api | provider unreachable -> 503 model_unavailable |
+| 3.10 | test_chat_api | another session cannot continue a conversation |
