@@ -49,6 +49,28 @@ ALLOWED_HOSTS = env.list(
     default=["127.0.0.1", "localhost"] if DEBUG else [],
 )
 
+# Security headers and cookies. Always safe to send; the HTTPS-only parts are
+# switched on with DJANGO_HTTPS=true once the site is served over HTTPS.
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = "DENY"
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
+SECURE_REFERRER_POLICY = "same-origin"
+# Request bodies above 2.5 MB are rejected (Django's default, kept explicitly).
+DATA_UPLOAD_MAX_MEMORY_SIZE = 2_621_440
+
+USE_HTTPS = env.bool("DJANGO_HTTPS", default=False)
+if USE_HTTPS:
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_SSL_REDIRECT = env.bool("DJANGO_SSL_REDIRECT", default=True)
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_HSTS_SECONDS = env.int("DJANGO_HSTS_SECONDS", default=0)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = SECURE_HSTS_SECONDS > 0
+    SECURE_HSTS_PRELOAD = False
+CSRF_TRUSTED_ORIGINS = env.list("DJANGO_CSRF_TRUSTED_ORIGINS", default=[])
+
 
 # Application definition
 
@@ -156,9 +178,15 @@ STATIC_URL = 'static/'
 # Email
 # https://docs.djangoproject.com/en/6.1/topics/email/#topic-email-configuration
 
+# The application sends no email. The console backend is used while
+# debugging; otherwise Django's SMTP backend (configure only if needed).
 MAILERS = {
     'default': {
-        'BACKEND': 'django.core.mail.backends.console.EmailBackend',
+        'BACKEND': env(
+            "DJANGO_EMAIL_BACKEND",
+            default="django.core.mail.backends.console.EmailBackend" if DEBUG
+            else "django.core.mail.backends.smtp.EmailBackend",
+        ),
     },
 }
 REST_FRAMEWORK = {
@@ -197,3 +225,25 @@ STALE_AFTER_HOURS = env.float("STALE_AFTER_HOURS", default=24.0)
 
 # Chat request rate limit per client (DRF throttle rate syntax).
 CHAT_RATE_LIMIT = env("CHAT_RATE_LIMIT", default="30/min")
+
+# ---------------------------------------------------------------------------
+# Logging: console only. Never log request bodies, secrets, API keys or full
+# prompts; services log the error type and short context only.
+# ---------------------------------------------------------------------------
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "plain": {"format": "{asctime} {levelname} {name}: {message}", "style": "{"},
+    },
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "plain"},
+    },
+    "root": {"handlers": ["console"], "level": env("DJANGO_LOG_LEVEL", default="INFO")},
+    "loggers": {
+        "django.request": {"handlers": ["console"], "level": "ERROR", "propagate": False},
+        "httpx": {"level": "WARNING"},
+        "openai": {"level": "WARNING"},
+    },
+}

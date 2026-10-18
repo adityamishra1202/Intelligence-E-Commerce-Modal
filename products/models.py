@@ -139,6 +139,11 @@ class Product(models.Model):
                 name="unique_product_per_website",
             )
         ]
+        indexes = [
+            models.Index(fields=["website", "is_available"], name="product_site_available_idx"),
+            models.Index(fields=["price"], name="product_price_idx"),
+            models.Index(fields=["rating"], name="product_rating_idx"),
+        ]
 
     def __str__(self):
         return f"{self.title} - {self.website.name}"

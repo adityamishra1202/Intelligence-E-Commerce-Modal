@@ -60,5 +60,10 @@ class Message(models.Model):
         auto_now_add=True
     )
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["conversation", "created_at"], name="message_conv_created_idx"),
+        ]
+
     def __str__(self):
         return f"{self.role}: {self.content[:50]}"    
