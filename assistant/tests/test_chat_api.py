@@ -134,20 +134,41 @@ class ChatFlowTests(ChatAPITestBase):
 
 
 class ChatIntentTests(ChatAPITestBase):
-    @expectedFailure  # flips in Phase 3.6 (out-of-scope redirect without LLM)
     def test_unrelated_request_is_redirected_without_llm(self):
         response = self.chat("write a python script to sort a list")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["intent"], "out_of_scope")
         self.assertEqual(response.fake.calls, [])
 
-    @expectedFailure  # flips in Phase 3.6 (shopping advice)
     def test_general_shopping_question_is_answered(self):
         llm = route(extraction(intent="general_question"), answer="General advice (not specific to products in the catalog): look at comfort.")
         response = self.chat("Is noise cancellation worth it for flights?", llm=llm)
         body = response.json()
         self.assertEqual(body["intent"], "general_question")
         self.assertIn("General advice", body["answer"])
+
+    def test_greeting_needs_no_model_call(self):
+        response = self.chat("hello")
+        self.assertEqual(response.json()["intent"], "general_question")
+        self.assertEqual(response.fake.calls, [])
+
+    def test_shopping_word_keeps_request_in_scope(self):
+        response = self.chat("best laptop for python programming under $1200",
+                             llm=route(extraction(category="laptop", keywords=["laptop"])))
+        self.assertEqual(response.json()["intent"], "product_search")
+
+    def test_model_classified_out_of_scope_is_redirected(self):
+        response = self.chat("tell me about the weather on mars",
+                             llm=route(extraction(intent="out_of_scope")))
+        body = response.json()
+        self.assertEqual(body["intent"], "out_of_scope")
+        self.assertEqual(body["products"], [])
+
+    def test_advice_with_code_is_replaced_by_redirect(self):
+        llm = route(extraction(intent="general_question"), answer="```python\nprint(1)\n```")
+        body = self.chat("how do I choose a keyboard?", llm=llm).json()
+        self.assertNotIn("```", body["answer"])
+        self.assertIn("shopping assistant", body["answer"])
 
     def test_general_question_does_not_erase_memory(self):
         first = self.chat("Suggest headphones under $350").json()

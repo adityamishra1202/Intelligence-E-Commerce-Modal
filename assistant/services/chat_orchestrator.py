@@ -19,6 +19,9 @@ from assistant.services.currency_policy import currency_from_reply, decide_curre
 from assistant.services.grounded_response_service import GroundedResponseService
 from assistant.services.hybrid_search_service import HybridSearchService
 from assistant.services.requirements_service import RequirementsService, ShoppingRequirements
+from assistant.services.scope_guard import GREETING_REPLY, OUT_OF_SCOPE_REPLY
+from assistant.services.scope_guard import check as scope_check
+from assistant.services.shopping_advice_service import ShoppingAdviceService
 from conversations.models import Conversation, Message
 from websites.models import Website
 
@@ -132,6 +135,13 @@ class ChatOrchestrator:
     # -- the turn ------------------------------------------------------------
 
     def _respond(self, message, website_ids, history, previous):
+        # Deterministic scope check before any model call. Memory is untouched.
+        verdict = scope_check(message)
+        if verdict == "out_of_scope":
+            return ChatResult(message=message, intent="out_of_scope", answer=OUT_OF_SCOPE_REPLY)
+        if verdict == "greeting":
+            return ChatResult(message=message, intent="general_question", answer=GREETING_REPLY)
+
         pending = previous.pop("awaiting", None)
         options = previous.pop("currency_options", [])
 
@@ -143,16 +153,16 @@ class ChatOrchestrator:
         else:
             requirements = self._extract(message, history, previous)
 
+        # Neither general questions nor out-of-scope requests change memory.
         if requirements.intent == "general_question":
             return ChatResult(
                 message=message,
                 intent="general_question",
-                answer=(
-                    "I'm EcommerceAI, your shopping assistant. Ask me to find or "
-                    "compare products, and I'll search the selected product catalog."
-                ),
-                requirements=requirements.model_dump(mode="json"),
+                answer=ShoppingAdviceService().answer(message),
             )
+
+        if requirements.intent == "out_of_scope":
+            return ChatResult(message=message, intent="out_of_scope", answer=OUT_OF_SCOPE_REPLY)
 
         if requirements.intent == "clarification_needed":
             return ChatResult(

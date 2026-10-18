@@ -17,6 +17,7 @@ class ShoppingRequirements(BaseModel):
         "product_search",
         "product_comparison",
         "general_question",
+        "out_of_scope",
         "clarification_needed",
     ] = "product_search"
 
@@ -170,8 +171,12 @@ RULES:
 
 2. Use product_comparison when comparing products.
 
-3. Use general_question only for questions unrelated to finding,
-   filtering, or comparing products.
+3. Use general_question for shopping or buying knowledge questions that
+   are not a search of the catalog (for example "is noise cancellation
+   worth it for flights?" or "what should I look for in a laptop?").
+
+3a. Use out_of_scope for anything unrelated to shopping (code, essays,
+    homework, translations, general chit-chat).
 
 4. Use clarification_needed when the request cannot reasonably
    be interpreted without clarification.
@@ -883,6 +888,7 @@ CURRENT USER MESSAGE:
         # Do not merge shopping filters into unrelated questions.
         if current["intent"] in (
             "general_question",
+            "out_of_scope",
             "clarification_needed",
         ):
             return new_requirements

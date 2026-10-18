@@ -65,3 +65,15 @@ class LLMService:
         )
 
         return response.choices[0].message.content
+
+def call_llm(llm_service, messages, **kwargs):
+    """
+    Send one chat completion through the configured provider and return the
+    message text. Every service calls the model through this function.
+    """
+    response = llm_service.client.chat.completions.create(
+        model=llm_service.model,
+        messages=messages,
+        **kwargs,
+    )
+    return response.choices[0].message.content
