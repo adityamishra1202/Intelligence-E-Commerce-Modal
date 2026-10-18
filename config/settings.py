@@ -166,6 +166,10 @@ REST_FRAMEWORK = {
         "rest_framework.pagination.PageNumberPagination"
     ),
     "PAGE_SIZE": 10,
+    # Per-client request limits; the chat view uses the "chat" scope.
+    "DEFAULT_THROTTLE_RATES": {
+        "chat": env("CHAT_RATE_LIMIT", default="30/min"),
+    },
 }
 
 # ---------------------------------------------------------------------------

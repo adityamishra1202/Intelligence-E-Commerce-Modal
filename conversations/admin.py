@@ -10,7 +10,7 @@ class MessageInline(admin.TabularInline):
 
 @admin.register(Conversation)
 class ConversationAdmin(admin.ModelAdmin):
-    list_display = ("id", "title", "created_at", "updated_at")
+    list_display = ("id", "title", "owner_key", "created_at", "updated_at")
     search_fields = ("title",)
     readonly_fields = ("created_at", "updated_at")
     inlines = [MessageInline]

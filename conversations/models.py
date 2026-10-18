@@ -16,6 +16,16 @@ class Conversation(models.Model):
         blank=True
     )
 
+    # Session key of the browser that created the conversation. Lookups are
+    # filtered by it; rows created before ownership existed keep '' and are
+    # reachable only through the Django admin.
+    owner_key = models.CharField(
+        max_length=64,
+        db_index=True,
+        blank=True,
+        default=""
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True
     )

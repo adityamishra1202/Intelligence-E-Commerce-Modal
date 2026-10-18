@@ -104,7 +104,8 @@ class ChatOrchestrator:
     def _load_conversation(self, owner_key, conversation_id, website_ids):
         if conversation_id is None:
             return None
-        conversation = Conversation.objects.filter(id=conversation_id).first()
+        # Another owner's conversation is reported as not found (never 403).
+        conversation = Conversation.objects.filter(id=conversation_id, owner_key=owner_key).first()
         if conversation is None or sorted(conversation.website_scope) != website_ids:
             raise ConversationNotFoundError()
         return conversation
@@ -221,6 +222,7 @@ class ChatOrchestrator:
         with transaction.atomic():
             if conversation is None:
                 conversation = Conversation.objects.create(
+                    owner_key=owner_key,
                     title=message[:200],
                     website_scope=website_ids,
                     current_requirements={},

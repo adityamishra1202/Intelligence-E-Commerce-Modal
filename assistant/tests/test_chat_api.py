@@ -1,5 +1,5 @@
 """POST /api/chat/ end to end with the LLM and embeddings faked."""
-from unittest import expectedFailure
+from unittest import mock
 
 import httpx
 import openai
@@ -188,9 +188,32 @@ class ChatIntentTests(ChatAPITestBase):
 
 
 class ChatOwnershipTests(ChatAPITestBase):
-    @expectedFailure  # flips in Phase 3.10 (conversation ownership)
     def test_other_session_cannot_continue_conversation(self):
         first = self.chat("Suggest headphones under $350").json()
         stranger = APIClient()
         response = self.chat("Which has the best rating?", conversation_id=first["conversation_id"], client=stranger)
         self.assertEqual(response.status_code, 404)
+
+    def test_owner_can_continue_and_new_session_gets_a_cookie(self):
+        first = self.chat("Suggest headphones under $350")
+        self.assertIn("sessionid", first.cookies)
+        conversation = Conversation.objects.get(id=first.json()["conversation_id"])
+        self.assertTrue(conversation.owner_key)
+        second = self.chat("Which has the best rating?", conversation_id=conversation.id)
+        self.assertEqual(second.status_code, 200)
+
+    def test_rows_without_owner_are_not_reachable(self):
+        legacy = Conversation.objects.create(title="old", website_scope=[self.usd])
+        self.assertEqual(self.chat("hi", conversation_id=legacy.id).status_code, 404)
+
+
+class ChatThrottleTests(ChatAPITestBase):
+    def test_rate_limit_returns_code(self):
+        from rest_framework.throttling import ScopedRateThrottle
+
+        with mock.patch.object(ScopedRateThrottle, "THROTTLE_RATES", {"chat": "2/min"}):
+            codes = [self.chat("hello").status_code for _ in range(3)]
+            response = self.chat("hello")
+        self.assertEqual(codes[:2], [200, 200])
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.json()["code"], "rate_limited")

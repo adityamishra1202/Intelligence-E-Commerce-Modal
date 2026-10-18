@@ -2,10 +2,12 @@ import logging
 
 from rest_framework import exceptions, status
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from assistant.serializers import ChatRequestSerializer
 from assistant.services.chat_orchestrator import ChatError, ChatOrchestrator
+from assistant.session import get_owner_key
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +19,13 @@ def error_response(message, code, http_status, **extra):
 
 class ChatAPIView(APIView):
     """POST /api/chat/ — validates the request and delegates to ChatOrchestrator."""
+
+    # Anonymous, session-owned conversations: no Django user login. Without
+    # SessionAuthentication DRF does not enforce CSRF; the endpoint only
+    # accepts JSON, which a cross-site HTML form cannot send.
+    authentication_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "chat"
 
     def handle_exception(self, exc):
         # Give DRF's own errors (bad JSON, unsupported media type, throttling)
@@ -42,7 +51,7 @@ class ChatAPIView(APIView):
         data = serializer.validated_data
         try:
             result = ChatOrchestrator().handle(
-                owner_key="",
+                owner_key=get_owner_key(request),
                 message=data["message"],
                 website_ids=data["website_ids"],
                 conversation_id=data.get("conversation_id"),

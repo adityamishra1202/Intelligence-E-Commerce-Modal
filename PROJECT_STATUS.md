@@ -19,7 +19,7 @@ The work was done outside the owner's machine, in a Linux sandbox:
 | 0 | Hygiene, configuration, test-database fix | tested | see Phase 0 below |
 | 1 | Verify the backend as it is | tested | see Phase 1 below |
 | 2 | Test harness and baseline tests | tested | `manage.py test`: 76 tests, OK (expected failures=12) |
-| 3 | Backend correctness and reliability | not_started | |
+| 3 | Backend correctness and reliability | tested | 114 tests OK, 0 expected failures; two-turn smoke test passes |
 | 4 | Connector framework and sync | not_started | |
 | 5 | Onboard existing websites | not_started | |
 | 6 | Comparison, alternatives, answer quality | not_started | |
@@ -116,3 +116,26 @@ No test calls a live model: every model call goes through `FakeLLM`, and embeddi
 | 3.8 | test_requirements | invalid JSON recovers |
 | 3.8 | test_chat_api | provider unreachable -> 503 model_unavailable |
 | 3.10 | test_chat_api | another session cannot continue a conversation |
+
+## Phase 3 — Backend correctness and reliability
+
+| Step | Defect | Status | Evidence |
+|---|---|---|---|
+| 3.1 ChatOrchestrator, short transaction | API-1 | tested | `test_failure_saves_nothing` (no conversation or message written when the model fails); thin view; `{error, code}` everywhere |
+| 3.2 Semantic fallback | API-2, API-7 | tested | embeddings down -> structured results + notice; empty search terms no longer return 400 |
+| 3.3 Explicit sort wins | API-6 | tested | smoke test turn 2 now 4.8, 4.7, 4.7, 4.6, 4.4, 4.2 |
+| 3.4 Brand matching, product fields | DATA-1 (part 1) | tested | whole-word brand, title fallback for empty brand; `brand` in ProductSerializer; results carry description, original_price, review_count, last_fetched_at |
+| 3.5 Currency policy | API-5 | tested | mixed currencies -> one question listing codes; the reply ("USD") resumes the search without a model call |
+| 3.6 Intent handling | API-3 | tested | scope guard before any model call; greeting needs no model; general shopping questions answered as labelled general advice; out_of_scope redirect |
+| 3.7 No-match diagnostics | API-4 | tested | e.g. "23 products are in your selected websites; 6 match "headphones"; ...; none costs 10.00 USD or less. The lowest price for headphones is 39.95 USD. Raise your budget to at least 39.95 USD." |
+| 3.8 LLM reliability | REL-1 | tested (mocked) | invalid JSON -> one strict retry -> heuristic extractor -> clarification; provider errors -> HTTP 503 `model_unavailable` |
+| 3.9 Answer validation | grounding | tested | invented price/URL replaced by a deterministic template |
+| 3.10 Ownership and throttling | SEC-3, SEC-2 | tested | another session gets 404; `ScopedRateThrottle` scope `chat` -> 429 `rate_limited` |
+
+Decisions and notes:
+- **Currency "in scope"** is read as the products that match the request's other hard filters. A laptop search across a USD and an INR site where only the USD site sells laptops is therefore not interrupted.
+- **No-match wording order.** The message checks product type, brand and features before stock, currency, price and rating. That gives the reading "N products; K are headphones; none is under 350 USD" from the example.
+- **New defects found and fixed:** API-7 (empty search terms gave HTTP 400), and the feature alias "anc" matching inside words such as "performance", so a mouse counted as noise-cancelling.
+- **Conversation owners.** Conversations created before 3.10 have `owner_key = ''` and are reachable only through the Django admin.
+- **Model size.** `qwen2.5:0.5b-instruct` is very small, and REL-1 could not be re-tested against it here. If extraction quality stays poor, try `LLM_PROVIDER=groq` or a larger Ollama model (for example `qwen2.5:3b-instruct`). The provider was not changed.
+- **Prompt size.** The answer prompt now holds at most 8 products (all matches are still returned as product cards). This speeds up the answer call.
