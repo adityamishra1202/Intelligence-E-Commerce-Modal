@@ -1,6 +1,4 @@
 """RequirementsService: extraction (mocked LLM) and deterministic memory merge."""
-from unittest import expectedFailure
-
 from django.test import SimpleTestCase
 
 from assistant.services.requirements_service import RequirementsService, ShoppingRequirements
@@ -108,9 +106,43 @@ class ExtractTests(SimpleTestCase):
             with self.assertRaises(ValueError):
                 RequirementsService().extract("   ")
 
-    @expectedFailure  # flips in Phase 3.8 (retry, then heuristic fallback)
     def test_invalid_json_recovers(self):
         with patch_llm(["not json", "still not json"]):
             result = RequirementsService().extract("headphones under $100")
         self.assertEqual(result.category, "headphones")
         self.assertEqual(result.max_price, 100.0)
+
+    def test_retry_uses_strict_instruction_and_second_answer(self):
+        with patch_llm(["not json", extraction(category="laptop", keywords=["laptop"])]) as fake:
+            result = RequirementsService().extract("show me laptops")
+        self.assertEqual(result.category, "laptop")
+        self.assertEqual(len(fake.calls), 2)
+        self.assertIn("Return ONLY one JSON object", fake.prompt_text(1))
+
+    def test_schema_violation_is_treated_like_invalid_json(self):
+        bad = extraction(min_price=500, max_price=100)
+        with patch_llm([bad, bad]):
+            result = RequirementsService().extract("cheapest headphones")
+        self.assertEqual(result.category, "headphones")
+        self.assertEqual(result.sort_by, "price_ascending")
+
+    def test_heuristic_understands_budget_change(self):
+        with patch_llm(["?", "?"]):
+            result = RequirementsService().extract("increase my budget to 400")
+        self.assertEqual(result.max_price, 400.0)
+
+    def test_nothing_understood_asks_for_clarification(self):
+        with patch_llm(["?", "?"]):
+            result = RequirementsService().extract("hmm maybe something nice")
+        self.assertEqual(result.intent, "clarification_needed")
+
+    def test_provider_error_becomes_model_unavailable(self):
+        import httpx
+        import openai
+
+        from assistant.services.errors import ModelUnavailableError
+
+        error = openai.APITimeoutError(request=httpx.Request("POST", "http://localhost:11434/v1/chat/completions"))
+        with patch_llm([error]):
+            with self.assertRaises(ModelUnavailableError):
+                RequirementsService().extract("headphones")

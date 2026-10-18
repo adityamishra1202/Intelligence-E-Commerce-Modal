@@ -1,5 +1,12 @@
-from openai import OpenAI
+import logging
+
+import openai
 from django.conf import settings
+from openai import OpenAI
+
+from assistant.services.errors import ModelUnavailableError
+
+logger = logging.getLogger(__name__)
 
 
 class LLMService:
@@ -71,9 +78,19 @@ def call_llm(llm_service, messages, **kwargs):
     Send one chat completion through the configured provider and return the
     message text. Every service calls the model through this function.
     """
-    response = llm_service.client.chat.completions.create(
-        model=llm_service.model,
-        messages=messages,
-        **kwargs,
-    )
+    try:
+        response = llm_service.client.chat.completions.create(
+            model=llm_service.model,
+            messages=messages,
+            **kwargs,
+        )
+    except (openai.APIConnectionError, openai.APITimeoutError, openai.APIStatusError) as exc:
+        # Log the exception type (and HTTP status) only: never the prompt,
+        # the provider payload or credentials.
+        logger.warning(
+            "Chat model call failed: %s%s",
+            type(exc).__name__,
+            f" (HTTP {exc.status_code})" if isinstance(exc, openai.APIStatusError) else "",
+        )
+        raise ModelUnavailableError() from exc
     return response.choices[0].message.content

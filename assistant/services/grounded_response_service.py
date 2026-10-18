@@ -1,6 +1,6 @@
 import json
 
-from assistant.services.llm_service import LLMService
+from assistant.services.llm_service import LLMService, call_llm
 
 
 class GroundedResponseService:
@@ -90,8 +90,8 @@ IMPORTANT:
   products were compared.
 """
 
-        response = self.llm_service.client.chat.completions.create(
-            model=self.llm_service.model,
+        answer = call_llm(
+            self.llm_service,
             messages=[
                 {
                     "role": "system",
@@ -111,7 +111,6 @@ IMPORTANT:
             temperature=0.1,
         )
 
-        answer = response.choices[0].message.content
 
         if not answer or not answer.strip():
             raise ValueError(

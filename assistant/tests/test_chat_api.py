@@ -134,7 +134,6 @@ class ChatFlowTests(ChatAPITestBase):
         self.assertTrue(response.json()["products"])
         self.assertIn("Semantic ranking was unavailable; results use standard ranking.", response.json()["notices"])
 
-    @expectedFailure  # flips in Phase 3.8 (model_unavailable)
     def test_provider_unreachable_is_503(self):
         response = self.chat("Suggest headphones under $350", llm=connection_error())
         self.assertEqual(response.status_code, 503)

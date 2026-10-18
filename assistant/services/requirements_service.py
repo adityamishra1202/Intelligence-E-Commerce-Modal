@@ -2,9 +2,22 @@ import json
 import re
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+import logging
 
-from assistant.services.llm_service import LLMService
+from pydantic import BaseModel, Field, ValidationError, model_validator
+
+from assistant.services.llm_service import LLMService, call_llm
+
+logger = logging.getLogger(__name__)
+
+EXTRACTION_SYSTEM_PROMPT = (
+    "You extract structured shopping requirements for EcommerceAI. Use "
+    "conversation context when available. Return valid JSON only."
+)
+STRICT_RETRY_INSTRUCTION = (
+    "Your previous reply was not valid. Return ONLY one JSON object with exactly "
+    "the fields listed above. No Markdown, no explanation."
+)
 
 
 # ==========================================================
@@ -287,48 +300,21 @@ CURRENT USER MESSAGE:
 {json.dumps(user_message)}
 """
 
-        # Call the configured language model.
-        response = (
-            self.llm_service.client.chat.completions.create(
-                model=self.llm_service.model,
-                messages=[
-                    {
-                        "role": "system",
-                        "content": (
-                            "You extract structured shopping requirements "
-                            "for EcommerceAI. Use conversation context when "
-                            "available. Return valid JSON only."
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": prompt,
-                    },
-                ],
-                response_format={"type": "json_object"},
-                temperature=0,
+        # Ask the model; if the reply is not valid JSON for our schema, retry
+        # once with a stricter instruction, then fall back to deterministic
+        # extraction. Provider outages raise ModelUnavailableError (HTTP 503).
+        messages = [
+            {"role": "system", "content": EXTRACTION_SYSTEM_PROMPT},
+            {"role": "user", "content": prompt},
+        ]
+        requirements = self._ask_model(messages)
+        if requirements is None:
+            requirements = self._ask_model(
+                messages + [{"role": "user", "content": STRICT_RETRY_INSTRUCTION}]
             )
-        )
-
-        # Extract model response.
-        content = response.choices[0].message.content
-
-        if not content:
-            raise ValueError(
-                "The AI returned an empty requirements response."
-            )
-
-        # Parse JSON returned by the model.
-        try:
-            data = json.loads(content)
-
-        except json.JSONDecodeError as exc:
-            raise ValueError(
-                "The AI returned invalid JSON."
-            ) from exc
-
-        # Validate the model's response first.
-        requirements = ShoppingRequirements.model_validate(data)
+        if requirements is None:
+            logger.warning("Requirement extraction returned invalid JSON twice; using heuristics.")
+            return self.heuristic_requirements(user_message)
 
         # Apply deterministic rules for common shopping preferences.
         requirements = self._apply_preference_rules(
@@ -337,6 +323,61 @@ CURRENT USER MESSAGE:
         )
 
         return requirements
+
+    def _ask_model(self, messages):
+        """One extraction call. Returns ShoppingRequirements, or None if the reply is unusable."""
+        content = call_llm(
+            self.llm_service,
+            messages=messages,
+            response_format={"type": "json_object"},
+            temperature=0,
+        )
+        if not content or not content.strip():
+            return None
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            return None
+        if not isinstance(data, dict):
+            return None
+        try:
+            return ShoppingRequirements.model_validate(data)
+        except ValidationError:
+            return None
+
+    # ------------------------------------------------------
+    # 3b. DETERMINISTIC FALLBACK EXTRACTION
+    # ------------------------------------------------------
+
+    def heuristic_requirements(self, user_message):
+        """
+        Extract requirements without the model: price limits ('under N'),
+        ratings ('above 4 stars'), known brands, category words, 'cheapest',
+        'best rated'. If nothing usable is found, ask the user to clarify.
+        """
+        base = ShoppingRequirements()
+        message = user_message.lower()
+        budget = re.search(
+            r"\bbudget\s+(?:to|of|is|at)\s+[$₹€£]?\s*(\d[\d,]*(?:\.\d+)?)", message
+        )
+        if budget:
+            base = base.model_copy(update={"max_price": float(budget.group(1).replace(",", ""))})
+
+        result = self._apply_preference_rules(base, user_message)
+        found = any([
+            result.category,
+            result.brand,
+            result.min_price is not None,
+            result.max_price is not None,
+            result.min_rating is not None,
+            result.must_have_features,
+            result.sort_by != "relevance",
+        ])
+        if result.intent == "general_question":
+            return result
+        if not found:
+            return ShoppingRequirements(intent="clarification_needed")
+        return result.model_copy(update={"intent": "product_search"})
 
     # ------------------------------------------------------
     # 4. APPLY DETERMINISTIC PREFERENCE RULES
