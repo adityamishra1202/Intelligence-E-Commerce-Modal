@@ -1,4 +1,4 @@
-﻿import json
+import json
 
 
 class ProductTextService:
@@ -37,13 +37,14 @@ class ProductTextService:
     def build_product_text(self, product):
         sections = []
 
+        # Only descriptive fields. Price, currency and rating change often and
+        # are filtered in SQL anyway; leaving them out means a price change
+        # never forces a new embedding.
         fields = [
             ("Title", product.title),
             ("Brand", product.brand),
             ("Category", product.category),
             ("Description", product.description),
-            ("Price", f"{product.price} {product.currency}"),
-            ("Rating", product.rating),
             ("Features", product.features),
             ("Specifications", product.specifications),
         ]

@@ -71,3 +71,15 @@ class HybridSearchTests(TestCase):
         ), patch_embeddings():
             results = HybridSearchService().search(r, [self.usd], limit=20)
         self.assertEqual([p["id"] for p in results], [p["id"] for p in structured])
+
+
+class ProductTextTests(TestCase):
+    def test_price_only_change_keeps_embedding_text(self):
+        from assistant.services.product_text_service import ProductTextService
+        from assistant.tests.factories import create_product, create_website
+
+        product = create_product(create_website("Text Store"), title="Sony Headphones", price="100.00", rating="4.1")
+        before = ProductTextService().build_product_text(product)
+        product.price, product.rating, product.currency = 250, 4.9, "INR"
+        self.assertEqual(ProductTextService().build_product_text(product), before)
+        self.assertNotIn("100", before)

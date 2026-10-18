@@ -79,6 +79,7 @@ class SyncServiceTests(SyncTestBase):
         run = self.sync(site)
         self.assertEqual((run.updated_count, run.unchanged_count), (1, 1))
         self.assertEqual(str(Product.objects.get(website=site, external_product_id="2").price), "999.00")
+        self.assertEqual(run.embed_calls, 0)  # price is not part of the embedding text
 
     def test_text_change_reembeds_only_that_product(self):
         self.write([record(1), record(2)])
