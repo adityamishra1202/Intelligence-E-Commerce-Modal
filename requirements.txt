@@ -1,0 +1,13 @@
+# EcommerceAI backend (Python 3.13). Pinned to the project's stack lock.
+Django==6.1.2
+djangorestframework==3.18.3
+django-filter==26.2
+django-environ==0.14.0
+python-dotenv==1.2.4
+psycopg[binary]==3.3.6
+pgvector==0.5.1
+pydantic==2.14.1
+openai==3.29.0
+requests==2.34.2
+# httpx is the HTTP client used by the openai package; pinned to keep it stable.
+httpx==0.28.1
