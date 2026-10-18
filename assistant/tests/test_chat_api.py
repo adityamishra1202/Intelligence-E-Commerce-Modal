@@ -85,6 +85,14 @@ class ChatFlowTests(ChatAPITestBase):
         self.assertTrue(body["products"])
         self.assertTrue(all(float(p["price"]) <= 350 for p in body["products"]))
 
+    def test_no_match_is_explained_without_model_answer(self):
+        response = self.chat("headphones under $10")
+        body = response.json()
+        self.assertEqual(body["products"], [])
+        self.assertIn("Raise your budget", body["answer"])
+        answer_calls = [c for c in response.fake.calls if "extract" not in c["messages"][0]["content"].lower()]
+        self.assertEqual(answer_calls, [])
+
     def test_both_messages_persisted_and_conversation_reused(self):
         first = self.chat("Suggest headphones under $350").json()
         second = self.chat("Which has the best rating?", conversation_id=first["conversation_id"]).json()

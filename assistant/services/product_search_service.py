@@ -1,4 +1,5 @@
 import re
+from decimal import Decimal
 
 from products.models import Product
 from assistant.services.requirements_service import (
@@ -52,6 +53,132 @@ def product_to_dict(product):
         "specifications": product.specifications,
         "last_fetched_at": product.last_fetched_at.isoformat() if product.last_fetched_at else None,
     }
+
+
+# Common variations of feature names.
+FEATURE_ALIASES = {
+    "wireless connectivity": [
+        "wireless",
+        "bluetooth",
+    ],
+    "wireless": [
+        "wireless",
+        "bluetooth",
+    ],
+    "bluetooth connectivity": [
+        "bluetooth",
+    ],
+    "noise cancellation": [
+        "noise cancellation",
+        "noise cancelling",
+        "noise-cancelling",
+        "noise canceling",
+        "noise-canceling",
+        "active noise cancellation",
+        "active noise cancelling",
+        "active noise canceling",
+        "anc",
+    ],
+    "noise cancelling": [
+        "noise cancellation",
+        "noise cancelling",
+        "noise-cancelling",
+        "noise canceling",
+        "noise-canceling",
+        "active noise cancellation",
+        "active noise cancelling",
+        "active noise canceling",
+        "anc",
+    ],
+    "water resistant": [
+        "water resistant",
+        "water-resistant",
+        "water resistance",
+    ],
+    "waterproof": [
+        "waterproof",
+        "water proof",
+    ],
+    "long battery life": [
+        "long battery life",
+        "extended battery life",
+        "longer battery life",
+        "hours of battery life",
+    ],
+    "fast charging": [
+        "fast charging",
+        "quick charging",
+        "rapid charging",
+    ],
+    "portable": [
+        "portable",
+        "compact",
+    ],
+    "high battery capacity": [
+        "high battery capacity",
+        "large battery capacity",
+        "huge battery capacity",
+        "high capacity",
+        "large capacity",
+        "huge capacity",
+        "mah capacity",
+    ],
+    "high capacity": [
+        "high capacity",
+        "large capacity",
+        "huge capacity",
+        "mah capacity",
+    ],
+    "multi-device connectivity": [
+        "multipoint",
+        "multi-device",
+        "multiple devices",
+        "multiple-device",
+    ],
+}
+
+
+def _text_of(value):
+    if isinstance(value, dict):
+        return " ".join(f"{key} {item}" for key, item in value.items())
+    if isinstance(value, (list, tuple, set)):
+        return " ".join(str(item) for item in value)
+    return str(value or "")
+
+
+def searchable_fields(product):
+    """Lower-cased text fields of a product used for matching."""
+    fields = {
+        "title": (product.title or "").lower(),
+        "category": (product.category or "").lower(),
+        "brand": (product.brand or "").lower(),
+        "description": (product.description or "").lower(),
+        "features": _text_of(getattr(product, "features", None)).lower(),
+        "specifications": _text_of(getattr(product, "specifications", None)).lower(),
+    }
+    fields["text"] = " ".join(fields.values())
+    return fields
+
+
+def category_matches(fields, requested_category):
+    """The requested product type may appear in the category, title, description or metadata."""
+    requested = requested_category.strip().lower()
+    return any(requested in fields[key] for key in ("category", "title", "description", "features", "specifications"))
+
+
+def _alias_in(alias, text):
+    # Short aliases such as "anc" must be whole words ("performance" is not ANC).
+    if len(alias) <= 4:
+        return bool(_word_pattern(alias).search(text))
+    return alias in text
+
+
+def features_match(fields, features):
+    """Every requested feature (or one of its aliases) must appear in the product text."""
+    return all(
+        any(_alias_in(alias, fields["text"]) for alias in FEATURE_ALIASES.get(feature, [feature]))
+        for feature in features
+    )
 
 
 class ProductSearchService:
@@ -159,93 +286,6 @@ class ProductSearchService:
         )
 
         # --------------------------------------------------
-        # 6. Feature aliases
-        #
-        # Normalize common variations of feature names.
-        # --------------------------------------------------
-
-        feature_aliases = {
-    "wireless connectivity": [
-        "wireless",
-        "bluetooth",
-    ],
-    "wireless": [
-        "wireless",
-        "bluetooth",
-    ],
-    "bluetooth connectivity": [
-        "bluetooth",
-    ],
-    "noise cancellation": [
-        "noise cancellation",
-        "noise cancelling",
-        "noise-cancelling",
-        "noise canceling",
-        "noise-canceling",
-        "active noise cancellation",
-        "active noise cancelling",
-        "active noise canceling",
-        "anc",
-    ],
-    "noise cancelling": [
-        "noise cancellation",
-        "noise cancelling",
-        "noise-cancelling",
-        "noise canceling",
-        "noise-canceling",
-        "active noise cancellation",
-        "active noise cancelling",
-        "active noise canceling",
-        "anc",
-    ],
-    "water resistant": [
-        "water resistant",
-        "water-resistant",
-        "water resistance",
-    ],
-    "waterproof": [
-        "waterproof",
-        "water proof",
-    ],
-    "long battery life": [
-        "long battery life",
-        "extended battery life",
-        "longer battery life",
-        "hours of battery life",
-    ],
-    "fast charging": [
-        "fast charging",
-        "quick charging",
-        "rapid charging",
-    ],
-    "portable": [
-        "portable",
-        "compact",
-    ],
-    "high battery capacity": [
-        "high battery capacity",
-        "large battery capacity",
-        "huge battery capacity",
-        "high capacity",
-        "large capacity",
-        "huge capacity",
-        "mah capacity",
-    ],
-    "high capacity": [
-        "high capacity",
-        "large capacity",
-        "huge capacity",
-        "mah capacity",
-    ],
-    "multi-device connectivity": [
-        "multipoint",
-        "multi-device",
-        "multiple devices",
-        "multiple-device",
-    ],
-}
-
-        # --------------------------------------------------
         # 7. Score and filter products
         # --------------------------------------------------
 
@@ -253,116 +293,24 @@ class ProductSearchService:
 
         for product in products:
 
-            title = (product.title or "").lower()
-            category = (product.category or "").lower()
-            brand = (product.brand or "").lower()
-            description = (product.description or "").lower()
+            fields = searchable_fields(product)
+            title = fields["title"]
+            category = fields["category"]
+            brand = fields["brand"]
+            description = fields["description"]
+            product_text = fields["text"]
 
-            product_features = getattr(
-                product,
-                "features",
-                None,
-            ) or []
-
-            specifications = getattr(
-                product,
-                "specifications",
-                None,
-            ) or {}
-
-            # Convert structured metadata into searchable text.
-            if isinstance(product_features, dict):
-                feature_text = " ".join(
-                    str(key) + " " + str(value)
-                    for key, value in product_features.items()
-                )
-
-            elif isinstance(
-                product_features,
-                (list, tuple, set),
-            ):
-                feature_text = " ".join(
-                    str(value)
-                    for value in product_features
-                )
-
-            else:
-                feature_text = str(product_features)
-
-            if isinstance(specifications, dict):
-                specification_text = " ".join(
-                    str(key) + " " + str(value)
-                    for key, value in specifications.items()
-                )
-
-            elif isinstance(
-                specifications,
-                (list, tuple, set),
-            ):
-                specification_text = " ".join(
-                    str(value)
-                    for value in specifications
-                )
-
-            else:
-                specification_text = str(specifications)
-
-            product_text = " ".join([
-                title,
-                category,
-                brand,
-                description,
-                feature_text.lower(),
-                specification_text.lower(),
-            ])
-
-            # ----------------------------------------------
-            # Brand is a hard constraint when explicitly asked
-            # ----------------------------------------------
-
+            # Brand, category and required features are hard constraints.
             if requested_brand and not brand_matches(product, requested_brand):
                 continue
 
-            # ----------------------------------------------
-            # Category matching
-            #
-            # The requested category can match the title,
-            # stored category, description, or metadata.
-            # ----------------------------------------------
-
             category_match = False
-
             if requested_category:
-                category_match = (
-                    requested_category in category
-                    or requested_category in title
-                    or requested_category in description
-                    or requested_category in feature_text.lower()
-                    or requested_category in specification_text.lower()
-                )
-
-                # Exclude unrelated products.
+                category_match = category_matches(fields, requested_category)
                 if not category_match:
                     continue
 
-            # ----------------------------------------------
-            # Required feature filtering
-            #
-            # Every requested feature must match.
-            # ----------------------------------------------
-
-            features_match = all(
-                any(
-                    alias in product_text
-                    for alias in feature_aliases.get(
-                        feature,
-                        [feature],
-                    )
-                )
-                for feature in features
-            )
-
-            if features and not features_match:
+            if features and not features_match(fields, features):
                 continue
 
             # ----------------------------------------------
@@ -492,3 +440,53 @@ class ProductSearchService:
             product_to_dict(product)
             for score, product in scored_products[:limit]
         ]
+
+    # ------------------------------------------------------
+    # Diagnostics: why did a search return nothing?
+    # ------------------------------------------------------
+
+    def diagnose(self, requirements, website_ids):
+        """
+        Apply the hard requirements one at a time. Returns an ordered list of
+        (stage, products remaining after that stage). Used only to explain an
+        empty result; it never adds products to an answer.
+        """
+        if isinstance(requirements, dict):
+            requirements = ShoppingRequirements.model_validate(requirements)
+        website_ids = [website_ids] if isinstance(website_ids, int) else list(website_ids)
+
+        remaining = list(
+            Product.objects.filter(website_id__in=website_ids, website__is_active=True)
+            .select_related("website")
+        )
+        stages = [("in_scope", remaining)]
+
+        def stage(name, keep):
+            nonlocal remaining
+            remaining = [product for product in remaining if keep(product)]
+            stages.append((name, remaining))
+
+        features = [f.strip().lower() for f in requirements.must_have_features if f and f.strip()]
+
+        if requirements.category:
+            stage("category", lambda p: category_matches(searchable_fields(p), requirements.category))
+        if requirements.brand:
+            stage("brand", lambda p: brand_matches(p, requirements.brand))
+        if features:
+            stage("features", lambda p: features_match(searchable_fields(p), features))
+        if requirements.only_available:
+            stage("available", lambda p: p.is_available)
+        if requirements.currency:
+            stage("currency", lambda p: (p.currency or "").upper() == requirements.currency.upper())
+        if requirements.min_price is not None:
+            stage("min_price", lambda p: p.price >= Decimal(str(requirements.min_price)))
+        if requirements.max_price is not None:
+            stage("max_price", lambda p: p.price <= Decimal(str(requirements.max_price)))
+        if requirements.min_rating is not None:
+            stage("min_rating", lambda p: p.rating is not None and p.rating >= Decimal(str(requirements.min_rating)))
+
+        if remaining:
+            found = {item["id"] for item in self.search(requirements, website_ids, limit=100)}
+            stage("keywords", lambda p: p.id in found)
+
+        return stages

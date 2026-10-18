@@ -18,8 +18,10 @@ from django.db import transaction
 from assistant.services.currency_policy import currency_from_reply, decide_currency
 from assistant.services.grounded_response_service import GroundedResponseService
 from assistant.services.hybrid_search_service import HybridSearchService
+from assistant.services.product_search_service import ProductSearchService
 from assistant.services.requirements_service import RequirementsService, ShoppingRequirements
 from assistant.services.scope_guard import GREETING_REPLY, OUT_OF_SCOPE_REPLY
+from assistant.services.search_diagnostics import build_no_match_message
 from assistant.services.scope_guard import check as scope_check
 from assistant.services.shopping_advice_service import ShoppingAdviceService
 from conversations.models import Conversation, Message
@@ -197,7 +199,12 @@ class ChatOrchestrator:
         if not hybrid.semantic_available:
             notices.append(SEMANTIC_UNAVAILABLE_NOTICE)
 
-        answer = GroundedResponseService().generate_answer(user_message=message, products=products)
+        if products:
+            answer = GroundedResponseService().generate_answer(user_message=message, products=products)
+        else:
+            # Deterministic explanation; no model call and no non-matching products.
+            stages = ProductSearchService().diagnose(requirements, website_ids)
+            answer = build_no_match_message(requirements, stages)
         requirements_json = requirements.model_dump(mode="json")
         return ChatResult(
             message=message,
