@@ -3,6 +3,12 @@ import json
 from assistant.services.llm_service import LLMService, call_llm
 
 
+# The model summarises at most this many products (all of them are still
+# returned to the UI as product cards). A smaller prompt is faster and more
+# reliable with small local models.
+MAX_PRODUCTS_IN_PROMPT = 8
+
+
 class GroundedResponseService:
 
     def __init__(self):
@@ -22,7 +28,7 @@ class GroundedResponseService:
         # Prepare the product information used by the AI.
         product_context = []
 
-        for product in products:
+        for product in products[:MAX_PRODUCTS_IN_PROMPT]:
             product_context.append({
                 "id": product.get("id"),
                 "website_name": product.get("website_name"),

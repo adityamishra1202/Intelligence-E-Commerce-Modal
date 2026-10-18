@@ -21,6 +21,7 @@ from assistant.services.errors import (  # noqa: F401 (re-exported for the view)
     ModelUnavailableError,
     WebsiteUnavailableError,
 )
+from assistant.services.answer_validator import validate_answer
 from assistant.services.currency_policy import currency_from_reply, decide_currency
 from assistant.services.grounded_response_service import GroundedResponseService
 from assistant.services.hybrid_search_service import HybridSearchService
@@ -181,6 +182,10 @@ class ChatOrchestrator:
 
         if products:
             answer = GroundedResponseService().generate_answer(user_message=message, products=products)
+            # Any price, rating or URL the records do not support -> template answer.
+            answer, valid = validate_answer(answer, products, requirements)
+            if not valid:
+                logger.warning("Generated answer contained unsupported values; used the template answer.")
         else:
             # Deterministic explanation; no model call and no non-matching products.
             stages = ProductSearchService().diagnose(requirements, website_ids)
