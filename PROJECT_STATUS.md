@@ -22,7 +22,7 @@ The work was done outside the owner's machine, in a Linux sandbox:
 | 3 | Backend correctness and reliability | tested | 114 tests OK, 0 expected failures; two-turn smoke test passes |
 | 4 | Connector framework and sync | tested | 172 tests OK; `sync_website --dry-run` verified |
 | 5 | Onboard existing websites | tested | 177 tests OK; three sandbox websites sync through connectors |
-| 6 | Comparison, alternatives, answer quality | not_started | |
+| 6 | Comparison, alternatives, answer quality | tested | 202 tests OK |
 | 7 | Read APIs for the UI | not_started | |
 | 8 | React + Vite chat UI | not_started | |
 | 9 | Production readiness | not_started | |
@@ -169,3 +169,13 @@ Done-when evidence: `test_fourth_json_website_needs_only_configuration` creates 
 
 **Your database:** the sandbox GadgetMart and TechGear rows are stand-ins, so their fixture files are not shipped. Run the commands in `ingestion/fixtures/README.md` on your own database.
 New command `configure_website` sets connector settings without the admin (generic; no site names in code).
+
+## Phase 6 — Comparison, alternatives and answer quality
+
+| Step | Status | Evidence |
+|---|---|---|
+| 6.1 ComparisonService | tested | `comparison_service.build_comparison`: rows (price, currency, rating, review_count, availability, key features, website) and facts (cheapest, best rated, most reviewed) computed only inside one currency; ties name every winner; a cross-website cheapest fact is dropped when one of those websites is stale (with a note). Used for intent `product_comparison` and questions such as "which is cheapest" / "which has the best rating" / "compare". The model only explains the object; the explanation goes through the answer validator and must name a compared product, otherwise a deterministic comparison text is used. |
+| 6.2 Alternatives | tested | `alternatives_service.find_alternatives`: at most 3, each fails exactly one of min_rating, max_price (up to +15%), one must-have feature; scope, currency, availability, brand and category never relaxed. Looked for when fewer than 3 products match. Returned in `alternatives` with `unmet`; the answer adds them under "These do not fully match your request:". `test_strict_budget_miss_is_an_alternative_not_a_match` proves a budget miss never appears in `products`. |
+| 6.3 Follow-up quality | tested | `test_multiturn.py`: budget change, brand change and removal, rating question, comparison of previous results, constraint removal, unrelated request mid-conversation (memory kept), new conversation starts clean. |
+
+Sandbox check (stand-in model): "Which headphones under $350 are cheapest?" across three websites -> cheapest fact JBL 39.95 USD; best rated lists both 4.7 Sony listings with their websites. "Sennheiser headphones under $140" -> Sennheiser HD 450BT (149.99 USD) offered as an alternative with "Price 149.99 USD is above your budget of 140.00 USD".

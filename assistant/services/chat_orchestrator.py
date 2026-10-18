@@ -22,7 +22,15 @@ from assistant.services.errors import (  # noqa: F401 (re-exported for the view)
     ModelUnavailableError,
     WebsiteUnavailableError,
 )
+from assistant.services.alternatives_service import find_alternatives, render_alternatives
 from assistant.services.answer_validator import validate_answer
+from assistant.services.comparison_service import (
+    ComparisonService,
+    build_comparison,
+    is_comparison_request,
+    mentions_compared_product,
+    render_comparison,
+)
 from assistant.services.currency_policy import currency_from_reply, decide_currency
 from assistant.services.grounded_response_service import GroundedResponseService
 from assistant.services.hybrid_search_service import HybridSearchService
@@ -39,6 +47,8 @@ logger = logging.getLogger(__name__)
 
 HISTORY_LIMIT = 10
 SEARCH_LIMIT = 20
+# Alternatives are looked for only when fewer matches than this were found.
+ALTERNATIVES_BELOW = 3
 SHOPPING_INTENTS = ("product_search", "product_comparison")
 SEMANTIC_UNAVAILABLE_NOTICE = "Semantic ranking was unavailable; results use standard ranking."
 
@@ -94,10 +104,13 @@ class ChatOrchestrator:
         history = self._history(conversation)
         previous = dict(conversation.current_requirements or {}) if conversation else {}
 
-        # All model and search work happens here, outside any transaction.
-        result = self._respond(message, website_ids, history, previous)
+        freshness, stale_notices = self._freshness(websites)
+        stale_ids = [f["website_id"] for f in freshness if f["stale"]]
 
-        result.website_freshness, stale_notices = self._freshness(websites)
+        # All model and search work happens here, outside any transaction.
+        result = self._respond(message, website_ids, history, previous, stale_ids)
+
+        result.website_freshness = freshness
         if stale_notices and result.intent in SHOPPING_INTENTS:
             result.notices.extend(stale_notices)
             result.answer = result.answer.rstrip() + "\n\n" + " ".join(stale_notices)
@@ -142,7 +155,7 @@ class ChatOrchestrator:
 
     # -- the turn ------------------------------------------------------------
 
-    def _respond(self, message, website_ids, history, previous):
+    def _respond(self, message, website_ids, history, previous, stale_ids=()):
         # Deterministic scope check before any model call. Memory is untouched.
         verdict = scope_check(message)
         if verdict == "out_of_scope":
@@ -205,7 +218,13 @@ class ChatOrchestrator:
         if not hybrid.semantic_available:
             notices.append(SEMANTIC_UNAVAILABLE_NOTICE)
 
-        if products:
+        comparison = None
+        if products and is_comparison_request(requirements, message):
+            comparison = build_comparison(products, stale_ids)
+
+        if comparison:
+            answer = self._explain_comparison(message, comparison, products, requirements)
+        elif products:
             answer = GroundedResponseService().generate_answer(user_message=message, products=products)
             # Any price, rating or URL the records do not support -> template answer.
             answer, valid = validate_answer(answer, products, requirements)
@@ -215,6 +234,13 @@ class ChatOrchestrator:
             # Deterministic explanation; no model call and no non-matching products.
             stages = ProductSearchService().diagnose(requirements, website_ids)
             answer = build_no_match_message(requirements, stages)
+
+        alternatives = []
+        if len(products) < ALTERNATIVES_BELOW:
+            alternatives = find_alternatives(requirements, website_ids, exclude_ids=[p["id"] for p in products])
+            if alternatives:
+                answer = answer.rstrip() + "\n\n" + render_alternatives(alternatives)
+
         requirements_json = requirements.model_dump(mode="json")
         return ChatResult(
             message=message,
@@ -222,9 +248,24 @@ class ChatOrchestrator:
             answer=answer,
             requirements=requirements_json,
             products=products,
+            alternatives=alternatives,
+            comparison=comparison,
             notices=notices,
             remember=requirements_json,
         )
+
+    @staticmethod
+    def _explain_comparison(message, comparison, products, requirements):
+        compared_ids = {row["id"] for row in comparison["products"]}
+        compared = [p for p in products if p["id"] in compared_ids]
+        explanation = ComparisonService().explain(message, comparison)
+        # An explanation that names none of the compared products is not used.
+        if explanation and mentions_compared_product(explanation, comparison):
+            explanation, valid = validate_answer(explanation, compared, requirements)
+            if valid:
+                return explanation
+            logger.warning("Comparison explanation contained unsupported values; used the computed comparison.")
+        return render_comparison(comparison)
 
     def _extract(self, message, history, previous):
         requirements_service = RequirementsService()
