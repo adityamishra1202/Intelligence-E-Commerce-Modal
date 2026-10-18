@@ -24,7 +24,7 @@ The work was done outside the owner's machine, in a Linux sandbox:
 | 5 | Onboard existing websites | tested | 177 tests OK; three sandbox websites sync through connectors |
 | 6 | Comparison, alternatives, answer quality | tested | 202 tests OK |
 | 7 | Read APIs for the UI | tested | 210 tests OK |
-| 8 | React + Vite chat UI | not_started | |
+| 8 | React + Vite chat UI | tested | `npm run build` OK; browser scenario passed (sandbox, stand-in model) |
 | 9 | Production readiness | not_started | |
 
 ## Phase 0 — Hygiene, configuration, test database
@@ -186,3 +186,15 @@ Sandbox check (stand-in model): "Which headphones under $350 are cheapest?" acro
 |---|---|---|
 | 7.1 Endpoints | tested | `GET /api/websites/` (active only, `stale` flag, no connector settings), `GET /api/conversations/` (this session, newest 50, newest first, plain list), `GET /api/conversations/<id>/` (messages oldest first; 404 for any other owner). Reads never create a session. |
 | 7.2 Contract tests | tested | `websites/tests.py` (2), `conversations/tests.py` (6): shape, ownership, inactive hidden, stale flag, 404 for another owner, legacy owner-less rows unreachable. API contract section in `ARCHITECTURE.md`. |
+
+## Phase 8 — React and Vite chat UI
+
+| Step | Status | Evidence |
+|---|---|---|
+| 8.1 Scaffold | tested | `frontend/` with react 18.3.1, react-dom, vite 5.4.11, @vitejs/plugin-react 4.3.4 only; `/api` proxied to 127.0.0.1:8000; `npm install` and `npm run build` succeed |
+| 8.2 API layer and state | tested | `api.js` (fetch, `credentials: 'same-origin'`, error codes mapped to friendly text); `App.jsx` uses hooks only; `requirements` is dropped before it reaches any component |
+| 8.3 Components | tested | WebsiteSelector (stale/not-synced badge, locked once a conversation starts), ConversationSidebar, ChatWindow, MessageBubble (notices, comparison table, alternatives section with unmet reasons), ProductCard (placeholder image, link only for http(s) URLs), Composer (Enter/Shift+Enter, 2000 limit), SimpleMarkdown (bold, lists, links; no dangerouslySetInnerHTML) |
+| 8.4 Responsive and accessible | tested | mobile-first CSS, labelled controls, focus ring, aria-live on messages, reduced-motion respected; 390 px wide viewport has no horizontal overflow |
+| 8.5 End-to-end scenario | tested (sandbox) | Django + Vite running, Chromium driven by a script outside the project. GadgetMart selected (ShopZone has only one headphone, so a rating comparison needs another site): "Suggest headphones under $350" -> 3 cards; website checkboxes locked. "Which has the best rating?" -> ratings 4.7, 4.6, 4.4 and a comparison table. "Actually increase my budget to 400" -> all prices <= 400. Reload, reopen from the sidebar -> 6 messages, scope restored and locked. No internal field names, JSON or stack traces in the page text; no page errors. |
+
+Not verified: the scenario with your real Ollama model (the sandbox used a stand-in model server). Run it once on your machine.
