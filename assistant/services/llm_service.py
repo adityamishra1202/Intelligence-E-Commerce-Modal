@@ -10,8 +10,8 @@ class LLMService:
             self.client = OpenAI(
                 base_url=settings.OLLAMA_BASE_URL,
                 api_key="ollama",
-                timeout=120.0,
-                max_retries=1,
+                timeout=settings.LLM_TIMEOUT_SECONDS,
+                max_retries=settings.LLM_MAX_RETRIES,
             )
             self.model = settings.OLLAMA_MODEL
 
@@ -29,8 +29,8 @@ class LLMService:
             self.client = OpenAI(
                 api_key=settings.GROQ_API_KEY,
                 base_url="https://api.groq.com/openai/v1",
-                timeout=30.0,
-                max_retries=2,
+                timeout=settings.LLM_TIMEOUT_SECONDS,
+                max_retries=settings.LLM_MAX_RETRIES,
             )
             self.model = settings.GROQ_MODEL
 

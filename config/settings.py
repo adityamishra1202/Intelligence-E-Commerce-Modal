@@ -13,12 +13,16 @@ import os
 from dotenv import load_dotenv
 from pathlib import Path
 import environ
+from django.core.exceptions import ImproperlyConfigured
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(BASE_DIR / ".env", override=True)
+
+# Values in .env fill in variables that are not already set in the real
+# environment. A variable set in the shell or by Task Scheduler wins.
+load_dotenv(BASE_DIR / ".env", override=False)
 
 env = environ.Env()
-environ.Env.read_env(BASE_DIR / ".env")
 
 
 
@@ -26,13 +30,24 @@ environ.Env.read_env(BASE_DIR / ".env")
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-mf^8or@!s3ec2k=egduf_rg(xnt4rodjq0!4#w77s^&hyxpq6h'
+# Debug is off unless DJANGO_DEBUG is explicitly true.
+DEBUG = env.bool("DJANGO_DEBUG", default=False)
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+# The insecure development key is accepted only while debugging locally.
+_DEV_SECRET_KEY = "django-insecure-mf^8or@!s3ec2k=egduf_rg(xnt4rodjq0!4#w77s^&hyxpq6h"
+SECRET_KEY = env("DJANGO_SECRET_KEY", default="")
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = _DEV_SECRET_KEY
+    else:
+        raise ImproperlyConfigured(
+            "Set DJANGO_SECRET_KEY, or set DJANGO_DEBUG=true for local development."
+        )
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = env.list(
+    "DJANGO_ALLOWED_HOSTS",
+    default=["127.0.0.1", "localhost"] if DEBUG else [],
+)
 
 
 # Application definition
@@ -153,20 +168,28 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 10,
 }
 
-GROQ_API_KEY=os.getenv("GROQ_API_KEY")
-GROQ_MODEL =os.getenv("GROQ_MODEL")
+# ---------------------------------------------------------------------------
+# AI providers (values come from the environment / .env)
+# ---------------------------------------------------------------------------
 
-LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()
+GROQ_API_KEY = env("GROQ_API_KEY", default="")
+GROQ_MODEL = env("GROQ_MODEL", default="")
 
-OLLAMA_BASE_URL = os.getenv(
-    "OLLAMA_BASE_URL",
-    "http://localhost:11434/v1"
+LLM_PROVIDER = env("LLM_PROVIDER", default="ollama").lower()
+
+OLLAMA_BASE_URL = env("OLLAMA_BASE_URL", default="http://localhost:11434/v1")
+OLLAMA_MODEL = env("OLLAMA_MODEL", default="qwen2.5:0.5b-instruct")
+OLLAMA_EMBEDDING_MODEL = env("OLLAMA_EMBEDDING_MODEL", default="nomic-embed-text")
+
+# Seconds to wait for a chat completion, and how many times the client retries.
+LLM_TIMEOUT_SECONDS = env.float("LLM_TIMEOUT_SECONDS", default=60.0)
+LLM_MAX_RETRIES = env.int(
+    "LLM_MAX_RETRIES",
+    default=2 if LLM_PROVIDER == "groq" else 0,
 )
 
-OLLAMA_MODEL = os.getenv(
-    "OLLAMA_MODEL",
-    "qwen2.5:0.5b-instruct"
-)
+# A website is "stale" when its last successful sync is older than this.
+STALE_AFTER_HOURS = env.float("STALE_AFTER_HOURS", default=24.0)
 
-OLLAMA_BASE_URL = "http://localhost:11434/v1"
-OLLAMA_EMBEDDING_MODEL = "nomic-embed-text"
+# Chat request rate limit per client (DRF throttle rate syntax).
+CHAT_RATE_LIMIT = env("CHAT_RATE_LIMIT", default="30/min")
